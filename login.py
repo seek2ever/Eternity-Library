@@ -5,8 +5,9 @@ from PyQt5.QtCore import QCoreApplication
 
 
 """
-本模块代码来自知乎：
+本模块代码来自知乎：https://zhuanlan.zhihu.com/p/52920094，实现登录窗口的简单功能
 """
+
 # 主窗体
 app = QApplication(sys.argv)  # 创建应用对象
 LoginWindow = QWidget()  # 构造登陆窗口
