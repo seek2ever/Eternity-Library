@@ -1,16 +1,37 @@
-# 这是一个示例 Python 脚本。
+class Books:
+    """
+    关于各种书籍的类，基本属性包括：书籍名称、作者、国籍、译者、出版单位、
+    出版日期、评分（1至5⭐）、页数、书籍类型（专业书籍、其它专著、文学作品、课外读物）、ISBN码、
+    阅读状态(尚未阅读、正在阅读、暂停阅读、阅读完成）、阅读进度、阅读时长、内容简介
+    """
 
-# 按 Shift+F10 执行或将其替换为您的代码。
-# 按 双击 Shift 在所有地方搜索类、文件、工具窗口、操作和设置。
+    def __init__(self, book_name, author, publisher="未知", publication_date="未知", pages=0, grade="⭐️",
+                 isbn="无", translator="无", nationality="中国", book_type="专业书籍",
+                 reading_status="尚未阅读", reading_time="无", reading_progress=0, introduction="无"):
+        self.book_name = book_name
+        self.author = author
+        self.publisher = publisher
+        self.publication_date = publication_date
+        self.pages = pages
+        self.grade = grade
+        self.isbn = isbn
+        self.translator = translator
+        self.nationality = nationality
+        self.book_type = book_type
+        self.reading_status = reading_status
+        self.reding_time = reading_time
+        self.reading_progress = reading_progress
+        self.introduction = introduction
+
+        print(f"书籍名称：{self.book_name}\n作者：{self.author}\n出版社：{self.publisher}\n评分：{self.grade}")
+
+    def book_animation(self):
+        """控制电子书打开、关闭、翻页时的动画效果"""
+        pass
+
+    def reading_duration(self):
+        """统计书籍的阅读时长"""
+        pass
 
 
-def print_hi(name):
-    # 在下面的代码行中使用断点来调试脚本。
-    print(f'Hi, {name}')  # 按 Ctrl+F8 切换断点。
-
-
-# 按装订区域中的绿色按钮以运行脚本。
-if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# 访问 https://www.jetbrains.com/help/pycharm/ 获取 PyCharm 帮助
+history_book = Books("中西文化交流史", "沈福伟")
