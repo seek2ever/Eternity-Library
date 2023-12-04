@@ -1,3 +1,6 @@
+import time
+
+
 class Books:
     """
     关于各种书籍的类，基本属性包括：书籍名称、作者、国籍、译者、出版单位、
@@ -5,9 +8,9 @@ class Books:
     阅读状态(尚未阅读、正在阅读、暂停阅读、阅读完成）、阅读进度、阅读时长、内容简介
     """
 
-    def __init__(self, book_name, author, publisher="未知", publication_date="未知", pages=0, grade="⭐️",
-                 isbn="无", translator="无", nationality="中国", book_type="专业书籍",
-                 reading_status="尚未阅读", reading_time="无", reading_progress=0, introduction="无"):
+    def __init__(self, book_name, author, publisher="", publication_date="", pages="", grade="",
+                 isbn="", translator="", nationality="", book_type="",
+                 reading_status="", reading_time="", reading_progress="", introduction=""):
         self.book_name = book_name
         self.author = author
         self.publisher = publisher
@@ -33,5 +36,17 @@ class Books:
         """统计书籍的阅读时长"""
         pass
 
+    def reading_edit_pdf(self):
+        """对pdf格式的书籍进行编辑"""
+        pass
 
-history_book = Books("中西文化交流史", "沈福伟")
+    def reading_edit_epub(self):
+        """对epub格式的书籍进行编辑"""
+        pass
+
+    def reading_edit_txt(self):
+        """对txt格式的书籍进行编辑"""
+        pass
+
+
+history_book = Books("Python编程：从入门到实践", "埃里克·马瑟斯", nationality="美国")
