@@ -33,8 +33,9 @@ class Books:
         pass
 
     def reading_duration(self):
-        """统计书籍的阅读时长"""
-        pass
+        """统计书籍的阅读时长，包括阅读的天数、阅读的小时数"""
+        add_time = time.time()              # 添加书籍到书库时获取的系统时间
+        open_time = time.time()             # 阅读书籍时获取的系统时间
 
     def reading_edit_pdf(self):
         """对pdf格式的书籍进行编辑"""
@@ -47,6 +48,16 @@ class Books:
     def reading_edit_txt(self):
         """对txt格式的书籍进行编辑"""
         pass
+
+    def reading_status(self):
+        """统计书籍的阅读状态"""
+        books_status = ['尚未阅读', '正在阅读', '暂停阅读', '阅读完成']
+        if eval(self.reading_progress) == 0:
+            self.reading_status = books_status[0]              # 将阅读状态设置为“尚未阅读”
+        elif eval(self.reading_progress) == 100:
+            self.reading_status = books_status[-1]             # 将阅读状态设置为“阅读完成”
+        else:
+            self.reading_status = input()                      # 由用户从给定的列表中选择阅读状态
 
 
 history_book = Books("Python编程：从入门到实践", "埃里克·马瑟斯", nationality="美国")
