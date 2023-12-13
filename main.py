@@ -1,3 +1,6 @@
+import os
+from typing import List, Union
+
 import time
 
 
@@ -99,6 +102,25 @@ class EpubBooks(Books):
         """对epub格式的书籍进行编辑"""
         pass
 
+
+def find_book_files(directory):
+    """
+    对于每一个目录，os.walk函数都会返回一个三元组，包含当前目录的路径（root），
+    当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
+    """
+    pdf_lists: list[Union[str, bytes]] = []     # 类型提示list[Union[str, bytes]]表示这个列表中的元素可以是字符串或字节串
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
+                pdf_lists.append(os.path.join(root, file))
+    return pdf_lists
+
+
+file_path = 'E:\\History\\新疆'  # 可以切换为想要搜索的目录，注意此处是绝对路径，文件层级之间有两个反斜杠（'\\'）
+pdf_files = find_book_files(file_path)
+
+for pdf_file in pdf_files:
+    print(pdf_file)
 
 # 创建Books类的实例
 history_book = Books("Python编程：从入门到实践", "埃里克·马瑟斯", nationality="美国")
