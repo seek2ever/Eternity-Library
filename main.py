@@ -1,7 +1,6 @@
 import os
-from typing import List, Union
-
 import time
+from typing import List, Union
 
 
 class Books:
@@ -49,7 +48,7 @@ class Books:
             self.reading_status = input()  # 由用户从给定的列表中选择阅读状态
 
     def reading_duration(self):
-        """统计书籍的阅读时长，包括阅读的天数、阅读的小时数（可切换为x时x分的格式"""
+        """统计书籍的阅读时长，包括阅读的天数、阅读的小时数（可切换为x时x分的格式）"""
         add_time = time.time()  # 添加书籍到书库时获取的系统时间
         last_time = time.time()  # 最后一次阅读书籍或书籍标记为“阅读完成”时获取的系统时间
         open_time = time.time()  # 每次阅读书籍时获取的系统时间
@@ -85,7 +84,7 @@ class TxtBooks(Books):
                          reading_time="", reading_date="", reading_link="", introduction="")
 
     def edit_txt(self):
-        """对txt格式的书籍进行编辑"""
+        """对txt格式的书籍内容进行编辑"""
         pass
 
 
@@ -99,28 +98,33 @@ class EpubBooks(Books):
                          reading_time="", reading_date="", reading_link="", introduction="")
 
     def edit_epub(self):
-        """对epub格式的书籍进行编辑"""
+        """对epub格式的书籍内容进行编辑"""
         pass
 
 
-def find_book_files(directory):
+def find_book_files(directory: str, output_file: str) -> List[Union[str, bytes]]:
     """
-    对于每一个目录，os.walk函数都会返回一个三元组，包含当前目录的路径（root），
-    当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
+    扫描本地硬盘中的电子书，
+    directory需要传入待扫描文件所在的绝对路径（例如：C:\\Users\\Admin\\Desktop）；
+    output_file需要传入写入文件的路径与文件名（例如：C:\\Users\\Admin\\Desktop\\file.txt）
     """
-    pdf_lists: list[Union[str, bytes]] = []     # 类型提示list[Union[str, bytes]]表示这个列表中的元素可以是字符串或字节串
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
-                pdf_lists.append(os.path.join(root, file))
+    pdf_lists: List[Union[str, bytes]] = []     # 本行类型提示详细解释见Notion相关页面
+    try:
+        # os.walk函数将扫描的每个目录返回一个三元组，包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
+                    pdf_lists.append(os.path.join(root, file))
+        with open(output_file, 'w') as file:
+            for item in pdf_lists:
+                file.write(item + '\n')
+            file.write("这是一段测试文本。")
+    except Exception as e:      # Exception是所有异常的基类，它代表了所有常见的错误类型
+        print(f"在扫描文件时发生错误: {e}")
     return pdf_lists
 
 
-file_path = 'E:\\History\\新疆'  # 可以切换为想要搜索的目录，注意此处是绝对路径，文件层级之间有两个反斜杠（'\\'）
-pdf_files = find_book_files(file_path)
-
-for pdf_file in pdf_files:
-    print(pdf_file)
-
 # 创建Books类的实例
 history_book = Books("Python编程：从入门到实践", "埃里克·马瑟斯", nationality="美国")
+# 调用find_book_files函数
+found_books = find_book_files('E:\\History\\中国历史\\二十四史', 'C:\\Users\\iou17\\Desktop\\file.txt')
