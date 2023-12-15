@@ -3,6 +3,28 @@ import time
 from typing import List, Union
 
 
+def find_book_files(directory: str, output_file: str) -> List[Union[str, bytes]]:
+    """
+    扫描本地硬盘中的电子书，
+    directory需要传入待扫描文件所在的绝对路径（例如：C:\\Users\\Admin\\Desktop）；
+    output_file需要传入写入文件的路径与文件名（例如：C:\\Users\\Admin\\Desktop\\file.txt）
+    """
+    pdf_lists: List[Union[str, bytes]] = []     # 本行类型提示详细解释见Notion相关页面
+    try:
+        # os.walk函数将扫描的每个目录返回一个三元组，包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
+                    pdf_lists.append(os.path.join(root, file))
+        with open(output_file, 'w') as file:
+            for item in pdf_lists:
+                file.write(item + '\n')
+            file.write("这是一段测试文本。")
+    except Exception as e:      # Exception是所有异常的基类，它代表了所有常见的错误类型
+        print(f"在扫描文件时发生错误: {e}")
+    return pdf_lists
+    
+    
 class Books:
     """
     关于各种书籍的类，基本属性包括：书籍名称、作者、国籍、译者、出版单位、
@@ -99,29 +121,6 @@ class EpubBooks(Books):
 
     def edit_epub(self):
         """对epub格式的书籍内容进行编辑"""
-        pass
-
-
-def find_book_files(directory: str, output_file: str) -> List[Union[str, bytes]]:
-    """
-    扫描本地硬盘中的电子书，
-    directory需要传入待扫描文件所在的绝对路径（例如：C:\\Users\\Admin\\Desktop）；
-    output_file需要传入写入文件的路径与文件名（例如：C:\\Users\\Admin\\Desktop\\file.txt）
-    """
-    pdf_lists: List[Union[str, bytes]] = []     # 本行类型提示详细解释见Notion相关页面
-    try:
-        # os.walk函数将扫描的每个目录返回一个三元组，包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
-        for root, dirs, files in os.walk(directory):
-            for file in files:
-                if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
-                    pdf_lists.append(os.path.join(root, file))
-        with open(output_file, 'w') as file:
-            for item in pdf_lists:
-                file.write(item + '\n')
-            file.write("这是一段测试文本。")
-    except Exception as e:      # Exception是所有异常的基类，它代表了所有常见的错误类型
-        print(f"在扫描文件时发生错误: {e}")
-    return pdf_lists
 
 
 # 创建Books类的实例
