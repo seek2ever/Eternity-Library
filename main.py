@@ -1,25 +1,27 @@
 import os
 import time
+import datetime
 from typing import List, Union
 
 
-def find_book_files(directory: str, output_file: str) -> List[Union[str, bytes]]:
+def scan_book_files(directory: str, output_file: str) -> List[Union[str, bytes]]:
     """
     扫描本地硬盘中的电子书，
     directory需要传入待扫描文件所在的绝对路径（例如：C:\\Users\\Admin\\Desktop）；
     output_file需要传入写入文件的路径与文件名（例如：C:\\Users\\Admin\\Desktop\\file.txt）
     """
     pdf_lists: List[Union[str, bytes]] = []     # 本行类型提示详细解释见Notion相关页面
+    current_date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
     try:
         # os.walk函数将扫描的每个目录返回一个三元组，包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
         for root, dirs, files in os.walk(directory):
             for file in files:
                 if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
                     pdf_lists.append(os.path.join(root, file))
-        with open(output_file, 'w') as file:
+        with open(output_file, 'a') as file:
             for item in pdf_lists:
                 file.write(item + '\n')
-            file.write("这是一段测试文本。")
+            file.write(f"以上是 {current_date} 的扫描结果。\n")
     except Exception as e:      # Exception是所有异常的基类，它代表了所有常见的错误类型
         print(f"在扫描文件时发生错误: {e}")
     return pdf_lists
@@ -32,9 +34,16 @@ class Books:
     阅读状态(尚未阅读、正在阅读、暂停阅读、阅读完成）、阅读进度、阅读时长、内容简介
     """
 
-    def __init__(self, book_name, author, nationality="", translator="", publisher="", publication_date="",
-                 level="", reading_status="", book_type="", isbn="", pages="", reading_progress="",
-                 reading_time="", reading_date="", reading_link="", introduction=""):
+    def __init__(self,
+                 book_name, author,
+                 nationality="", translator="",
+                 publisher="", publication_date="",
+                 level="", reading_status="",
+                 book_type="", isbn="",
+                 pages="", reading_progress="",
+                 reading_time="", reading_date="",
+                 reading_link="", introduction=""
+                 ):
         self.book_name = book_name
         self.author = author
         self.nationality = nationality
@@ -84,12 +93,27 @@ class Books:
 
 class PDFBooks(Books):
     """Books的子类：pdf格式电子书"""
-    def __init__(self, book_name, author, nationality="", translator="", publisher="", publication_date="", level="",
-                 reading_status="", book_type="", isbn="", pages="", reading_progress="",
-                 reading_time="", reading_date="", reading_link="", introduction=""):
-        super().__init__(book_name, author, nationality="", translator="", publisher="", publication_date="", level="",
-                         reading_status="", book_type="", isbn="", pages="", reading_progress="",
-                         reading_time="", reading_date="", reading_link="", introduction="")
+    def __init__(
+            self,
+            book_name, author,
+            nationality="", translator="",
+            publisher="", publication_date="",
+            level="", reading_status="",
+            book_type="", isbn="",
+            pages="", reading_progress="",
+            reading_time="", reading_date="",
+            reading_link="", introduction=""
+            ):
+        super().__init__(
+            book_name, author,
+            nationality, translator,
+            publisher, publication_date,
+            level, reading_status,
+            book_type, isbn,
+            pages, reading_progress,
+            reading_time, reading_date,
+            reading_link, introduction
+            )
 
     def edit_pdf(self):
         """对pdf格式的书籍进行编辑"""
@@ -98,12 +122,27 @@ class PDFBooks(Books):
 
 class TxtBooks(Books):
     """Books的子类：txt格式电子书"""
-    def __init__(self, book_name, author, nationality="", translator="", publisher="", publication_date="", level="",
-                 reading_status="", book_type="", isbn="", pages="", reading_progress="",
-                 reading_time="", reading_date="", reading_link="", introduction=""):
-        super().__init__(book_name, author, nationality="", translator="", publisher="", publication_date="",
-                         level="", reading_status="", book_type="", isbn="", pages="", reading_progress="",
-                         reading_time="", reading_date="", reading_link="", introduction="")
+    def __init__(
+            self,
+            book_name, author,
+            nationality="", translator="",
+            publisher="", publication_date="",
+            level="", reading_status="",
+            book_type="", isbn="",
+            pages="", reading_progress="",
+            reading_time="", reading_date="",
+            reading_link="", introduction=""
+            ):
+        super().__init__(
+            book_name, author,
+            nationality, translator,
+            publisher, publication_date,
+            level, reading_status,
+            book_type, isbn,
+            pages, reading_progress,
+            reading_time, reading_date,
+            reading_link, introduction
+            )
 
     def edit_txt(self):
         """对txt格式的书籍内容进行编辑"""
@@ -112,12 +151,27 @@ class TxtBooks(Books):
 
 class EpubBooks(Books):
     """Books的子类：epub格式电子书"""
-    def __init__(self, book_name, author, nationality="", translator="", publisher="", publication_date="", level="",
-                 reading_status="", book_type="", isbn="", pages="", reading_progress="",
-                 reading_time="", reading_date="", reading_link="", introduction=""):
-        super().__init__(book_name, author, nationality="", translator="", publisher="", publication_date="",
-                         level="", reading_status="", book_type="", isbn="", pages="", reading_progress="",
-                         reading_time="", reading_date="", reading_link="", introduction="")
+    def __init__(
+            self,
+            book_name, author,
+            nationality="", translator="",
+            publisher="", publication_date="",
+            level="", reading_status="",
+            book_type="", isbn="",
+            pages="", reading_progress="",
+            reading_time="", reading_date="",
+            reading_link="", introduction=""
+            ):
+        super().__init__(
+            book_name, author,
+            nationality, translator,
+            publisher, publication_date,
+            level, reading_status,
+            book_type, isbn,
+            pages, reading_progress,
+            reading_time, reading_date,
+            reading_link, introduction
+            )
 
     def edit_epub(self):
         """对epub格式的书籍内容进行编辑"""
@@ -126,4 +180,6 @@ class EpubBooks(Books):
 # 创建Books类的实例
 history_book = Books("Python编程：从入门到实践", "埃里克·马瑟斯", nationality="美国")
 # 调用find_book_files函数
-found_books = find_book_files('E:\\History\\中国历史\\二十四史', 'C:\\Users\\iou17\\Desktop\\file.txt')
+found_books = scan_book_files(
+    'E:\\History\\中国历史\\现代专著',
+    'C:\\Users\\iou17\\Desktop\\scanned files.txt')
