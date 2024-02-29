@@ -178,7 +178,7 @@ class EpubBooks(Books):
 
 
 # 创建Books类的实例
-history_book = Books("Python编程：从入门到实践", "埃里克·马瑟斯", nationality="美国")
+history_book = Books("Python编程：从入门到实践", "埃里克·马瑟斯", nationality="US")
 # 调用find_book_files函数
 found_books = scan_book_files(
     'E:\\History\\中国历史\\现代专著',
