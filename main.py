@@ -1,30 +1,61 @@
 import os
+import sys
 import time
 import datetime
 from typing import List, Union
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog, QVBoxLayout
+from PyQt5.QtCore import Qt
 
 
-def scan_book_files(directory: str, output_file: str) -> List[Union[str, bytes]]:
+class ScanBookFiles(QWidget):
     """
-    扫描本地硬盘中的电子书，
-    directory需要传入待扫描文件所在的绝对路径（例如：C:\\Users\\Admin\\Desktop）；
-    output_file需要传入写入文件的路径与文件名（例如：C:\\Users\\Admin\\Desktop\\file.txt）
+    选择扫描路径的窗口，用户可以通过点击按钮选择扫描文件所在的路径，
+    该窗口还会调用scan_book_files函数扫描文件夹中的电子书，并将结果写入文本文件
     """
-    pdf_lists: List[Union[str, bytes]] = []     # 本行类型提示详细解释见Notion相关页面
-    current_date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
-    try:
-        # os.walk函数将扫描的每个目录返回一个三元组，包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
-        for root, dirs, files in os.walk(directory):
-            for file in files:
-                if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
-                    pdf_lists.append(os.path.join(root, file))
-        with open(output_file, 'a') as file:
-            for item in pdf_lists:
-                file.write(item + '\n')
-            file.write(f"以上是 {current_date} 的扫描结果。\n")
-    except Exception as e:      # Exception是所有异常的基类，它代表了所有常见的错误类型
-        print(f"在扫描文件时发生错误: {e}")
-    return pdf_lists
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle('选择扫描路径')
+        self.setGeometry(100, 100, 400, 200)
+
+        self.directory_label = QLabel('请选择扫描路径：')
+        self.selected_directory_label = QLabel("")
+
+        self.select_button = QPushButton('选择路径')
+        self.select_button.clicked.connect(self.select_directory)       # type: ignore
+
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.directory_label)
+        layout.addWidget(self.selected_directory_label)
+        layout.addWidget(self.select_button)
+        self.setLayout(layout)
+
+    def select_directory(self):
+        directory = QFileDialog.getExistingDirectory(self, "选择扫描路径", os.path.expanduser("~"))
+        if directory:
+            self.selected_directory_label.setText(directory)
+            self.scan_book_files(directory)
+
+    def scan_book_files(self, directory: str, output_file: str) -> List[Union[str, bytes]]:
+        """
+        扫描本地硬盘中的电子书，
+        directory需要传入待扫描文件所在的绝对路径（例如：C:\\Users\\Admin\\Desktop）；
+        output_file需要传入写入文件的路径与文件名（例如：C:\\Users\\Admin\\Desktop\\file.txt）
+        """
+        pdf_lists: List[Union[str, bytes]] = []     # 本行类型提示详细解释见Notion相关页面
+        current_date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
+        try:
+            # os.walk函数将扫描的每个目录返回一个三元组，包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
+            for root, dirs, files in os.walk(directory):
+                for file in files:
+                    if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
+                        pdf_lists.append(os.path.join(root, file))
+            with open(output_file, 'a') as file:
+                for item in pdf_lists:
+                    file.write(item + '\n')
+                file.write(f"以上是 {current_date} 的扫描结果。\n")
+        except Exception as e:      # Exception是所有异常的基类，它代表了所有常见的错误类型
+            print(f"在扫描文件时发生错误: {e}")
     
     
 class Books:
@@ -34,16 +65,17 @@ class Books:
     阅读状态(尚未阅读、正在阅读、暂停阅读、阅读完成）、阅读进度、阅读时长、内容简介
     """
 
-    def __init__(self,
-                 book_name, author,
-                 nationality="", translator="",
-                 publisher="", publication_date="",
-                 level="", reading_status="",
-                 book_type="", isbn="",
-                 pages="", reading_progress="",
-                 reading_time="", reading_date="",
-                 reading_link="", introduction=""
-                 ):
+    def __init__(
+            self,
+            book_name, author,
+            nationality="", translator="",
+            publisher="", publication_date="",
+            level="", reading_status="",
+            book_type="", isbn="",
+            pages="", reading_progress="",
+            reading_time="", reading_date="",
+            reading_link="", introduction=""
+            ):
         self.book_name = book_name
         self.author = author
         self.nationality = nationality
@@ -177,9 +209,12 @@ class EpubBooks(Books):
         """对epub格式的书籍内容进行编辑"""
 
 
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    scan_book_files = ScanBookFiles()
+    scan_book_files.show()
+    sys.exit(app.exec_())
+
 # 创建Books类的实例
 history_book = Books("Python编程：从入门到实践", "埃里克·马瑟斯", nationality="US")
-# 调用find_book_files函数
-found_books = scan_book_files(
-    'E:\\History\\中国历史\\现代专著',
-    'C:\\Users\\iou17\\Desktop\\scanned files.txt')
+
