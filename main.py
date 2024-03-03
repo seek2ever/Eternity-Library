@@ -3,7 +3,7 @@ import sys
 import time
 import datetime
 from typing import List, Union
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog, QVBoxLayout
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog, QVBoxLayout, QMessageBox
 from PyQt5.QtCore import Qt
 
 
@@ -14,7 +14,7 @@ class ScanBookFiles(QWidget):
     """
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('选择扫描路径')
+        self.setWindowTitle('扫描路径')
         self.setGeometry(100, 100, 400, 200)
 
         self.directory_label = QLabel('请选择扫描路径：')
@@ -31,12 +31,20 @@ class ScanBookFiles(QWidget):
         self.setLayout(layout)
 
     def select_directory(self):
+        #  os.path.expanduser("~") 表示打开用户的主目录
         directory = QFileDialog.getExistingDirectory(self, "选择扫描路径", os.path.expanduser("~"))
         if directory:
-            self.selected_directory_label.setText(directory)
-            self.scan_book_files(directory)
+            self.selected_directory_label.setText(directory)  # 将用户选择的文件夹路径显示在标签控件上
+            output_file = os.path.join(
+                directory,
+                'D:\\Softwares\\PycharmProjects\\Eternity-Library\\scanned_file.txt'
+            )  # 将扫描结果写入文件
+            self.scan_book_files(directory, output_file)
+        else:
+            QMessageBox.warning(self, "提示", "未选择文件夹路径！", QMessageBox.Ok)
 
-    def scan_book_files(self, directory: str, output_file: str) -> List[Union[str, bytes]]:
+    @staticmethod
+    def scan_book_files(directory: str, output_file: str):
         """
         扫描本地硬盘中的电子书，
         directory需要传入待扫描文件所在的绝对路径（例如：C:\\Users\\Admin\\Desktop）；
@@ -53,11 +61,11 @@ class ScanBookFiles(QWidget):
             with open(output_file, 'a') as file:
                 for item in pdf_lists:
                     file.write(item + '\n')
-                file.write(f"以上是 {current_date} 的扫描结果。\n")
+                file.write(f" --- 本次扫描日期：{current_date} --- \n")
         except Exception as e:      # Exception是所有异常的基类，它代表了所有常见的错误类型
             print(f"在扫描文件时发生错误: {e}")
-    
-    
+
+
 class Books:
     """
     关于各种书籍的类，基本属性包括：书籍名称、作者、国籍、译者、出版单位、
@@ -214,7 +222,3 @@ if __name__ == '__main__':
     scan_book_files = ScanBookFiles()
     scan_book_files.show()
     sys.exit(app.exec_())
-
-# 创建Books类的实例
-history_book = Books("Python编程：从入门到实践", "埃里克·马瑟斯", nationality="US")
-
