@@ -35,25 +35,22 @@ class ScanBookFiles(QWidget):
         directory = QFileDialog.getExistingDirectory(self, "选择扫描路径", os.path.expanduser("~"))
         if directory:
             self.selected_directory_label.setText(directory)  # 将用户选择的文件夹路径显示在标签控件上
-            output_file = os.path.join(
-                directory,
-                'D:\\Softwares\\PycharmProjects\\Eternity-Library\\scanned_file.txt'
-            )  # 将扫描结果写入文件
+            project_root = os.path.dirname(os.path.abspath(__file__))           # 获取项目的根目录路径
+            output_file = os.path.join(project_root, 'scanned_record.txt')      # 将扫描结果写入scanned_file.txt
             self.scan_book_files(directory, output_file)
         else:
-            QMessageBox.warning(self, "提示", "未选择文件夹路径！", QMessageBox.Ok)
+            QMessageBox.warning(self, "提示", "未选择路径！扫描已取消。", QMessageBox.Ok)
 
     @staticmethod
     def scan_book_files(directory: str, output_file: str):
         """
-        扫描本地硬盘中的电子书，
-        directory需要传入待扫描文件所在的绝对路径（例如：C:\\Users\\Admin\\Desktop）；
-        output_file需要传入写入文件的路径与文件名（例如：C:\\Users\\Admin\\Desktop\\file.txt）
+        扫描本地硬盘中的电子书，directory为待扫描文件所在路径；output_file为扫描记录的路径
         """
         pdf_lists: List[Union[str, bytes]] = []     # 本行类型提示详细解释见Notion相关页面
         current_date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
         try:
-            # os.walk函数将扫描的每个目录返回一个三元组，包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
+            # os.walk函数将扫描的每个目录返回一个三元组，
+            # 包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
             for root, dirs, files in os.walk(directory):
                 for file in files:
                     if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
@@ -78,11 +75,11 @@ class Books:
             book_name, author,
             nationality="", translator="",
             publisher="", publication_date="",
-            level="", reading_status="",
+            level="", read_status="",
             book_type="", isbn="",
-            pages="", reading_progress="",
-            reading_time="", reading_date="",
-            reading_link="", introduction=""
+            pages="", read_progress="",
+            read_time="", read_date="",
+            read_link="", introduction=""
             ):
         self.book_name = book_name
         self.author = author
@@ -91,14 +88,14 @@ class Books:
         self.publisher = publisher
         self.publication_date = publication_date
         self.level = level
-        self.reading_status = reading_status
+        self.read_status = read_status
         self.book_type = book_type
         self.isbn = isbn
         self.pages = pages
-        self.reading_progress = reading_progress
-        self.reding_time = reading_time             # 阅读时长（单位：小时）
-        self.reading_date = reading_date
-        self.reading_link = reading_link            # 第三方阅读器或书籍评分网站（如豆瓣读书）的网址链接
+        self.read_progress = read_progress
+        self.read_time = read_time             # 阅读时长（单位：小时）
+        self.read_date = read_date
+        self.read_link = read_link            # 第三方阅读器或书籍评分网站（如豆瓣读书）的网址链接
         self.introduction = introduction
 
         print(f"书籍名称：{self.book_name}\n作者：{self.author}\n出版社：{self.publisher}\n评分：{self.level}")
@@ -108,17 +105,17 @@ class Books:
         level_symbol = ['⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐']
         set_level = input()
 
-    def reading_status(self):
+    def read_status(self):
         """统计书籍的阅读状态"""
         books_status = ['尚未阅读', '正在阅读', '暂停阅读', '阅读完成']
-        if eval(self.reading_progress) == 0:
-            self.reading_status = books_status[0]  # 将阅读状态设置为“尚未阅读”
-        elif eval(self.reading_progress) == 100:
-            self.reading_status = books_status[-1]  # 将阅读状态设置为“阅读完成”
+        if eval(self.read_progress) == 0:
+            self.read_status = books_status[0]  # 将阅读状态设置为“尚未阅读”
+        elif eval(self.read_progress) == 100:
+            self.read_status = books_status[-1]  # 将阅读状态设置为“阅读完成”
         else:
-            self.reading_status = input()  # 由用户从给定的列表中选择阅读状态
+            self.read_status = input()  # 由用户从给定的列表中选择阅读状态
 
-    def reading_duration(self):
+    def read_duration(self):
         """统计书籍的阅读时长，包括阅读的天数、阅读的小时数（可切换为x时x分的格式）"""
         add_time = time.time()  # 添加书籍到书库时获取的系统时间
         last_time = time.time()  # 最后一次阅读书籍或书籍标记为“阅读完成”时获取的系统时间
@@ -138,21 +135,21 @@ class PDFBooks(Books):
             book_name, author,
             nationality="", translator="",
             publisher="", publication_date="",
-            level="", reading_status="",
+            level="", read_status="",
             book_type="", isbn="",
-            pages="", reading_progress="",
-            reading_time="", reading_date="",
-            reading_link="", introduction=""
+            pages="", read_progress="",
+            read_time="", read_date="",
+            read_link="", introduction=""
             ):
         super().__init__(
             book_name, author,
             nationality, translator,
             publisher, publication_date,
-            level, reading_status,
+            level, read_status,
             book_type, isbn,
-            pages, reading_progress,
-            reading_time, reading_date,
-            reading_link, introduction
+            pages, read_progress,
+            read_time, read_date,
+            read_link, introduction
             )
 
     def edit_pdf(self):
@@ -167,21 +164,21 @@ class TxtBooks(Books):
             book_name, author,
             nationality="", translator="",
             publisher="", publication_date="",
-            level="", reading_status="",
+            level="", read_status="",
             book_type="", isbn="",
-            pages="", reading_progress="",
-            reading_time="", reading_date="",
-            reading_link="", introduction=""
+            pages="", read_progress="",
+            read_time="", read_date="",
+            read_link="", introduction=""
             ):
         super().__init__(
             book_name, author,
             nationality, translator,
             publisher, publication_date,
-            level, reading_status,
+            level, read_status,
             book_type, isbn,
-            pages, reading_progress,
-            reading_time, reading_date,
-            reading_link, introduction
+            pages, read_progress,
+            read_time, read_date,
+            read_link, introduction
             )
 
     def edit_txt(self):
@@ -196,21 +193,21 @@ class EpubBooks(Books):
             book_name, author,
             nationality="", translator="",
             publisher="", publication_date="",
-            level="", reading_status="",
+            level="", read_status="",
             book_type="", isbn="",
-            pages="", reading_progress="",
-            reading_time="", reading_date="",
-            reading_link="", introduction=""
+            pages="", read_progress="",
+            read_time="", read_date="",
+            read_link="", introduction=""
             ):
         super().__init__(
             book_name, author,
             nationality, translator,
             publisher, publication_date,
-            level, reading_status,
+            level, read_status,
             book_type, isbn,
-            pages, reading_progress,
-            reading_time, reading_date,
-            reading_link, introduction
+            pages, read_progress,
+            read_time, read_date,
+            read_link, introduction
             )
 
     def edit_epub(self):
