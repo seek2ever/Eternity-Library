@@ -40,9 +40,10 @@ class ScanBookFiles(QWidget):
             self.scan_book_files(directory, output_file)
         else:
             QMessageBox.warning(self, "提示", "未选择路径！扫描已取消。", QMessageBox.Ok)
+            self.close()
 
     @staticmethod
-    def scan_book_files(directory: str, output_file: str):
+    def scan_book_files(directory: str, output_file: str, self=None):
         """
         扫描本地硬盘中的电子书，directory为待扫描文件所在路径；output_file为扫描记录的路径
         """
@@ -59,6 +60,19 @@ class ScanBookFiles(QWidget):
                 for item in pdf_lists:
                     file.write(item + '\n')
                 file.write(f" --- 本次扫描日期：{current_date} --- \n")
+
+                # 显示询问弹窗，让用户决定是否继续扫描其他文件夹
+                reply = QMessageBox.question(None, "提示", "扫描完成！是否继续扫描其他文件夹？",
+                                             QMessageBox.Yes | QMessageBox.No)
+                if reply == QMessageBox.Yes:
+                    # 用户选择继续扫描，则递归调用自身，并传入新的文件夹路径
+                    new_directory = QFileDialog.getExistingDirectory(None, "选择扫描路径", os.path.expanduser("~"))
+                    if new_directory:
+                        ScanBookFiles.scan_book_files(new_directory, output_file)
+                else:
+                    # 用户选择结束扫描，则显示提示信息
+                    QMessageBox.information(None, "提示", "扫描已结束！", QMessageBox.Ok)
+
         except Exception as e:      # Exception是所有异常的基类，它代表了所有常见的错误类型
             print(f"在扫描文件时发生错误: {e}")
 
