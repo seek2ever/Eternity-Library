@@ -14,8 +14,8 @@ class ScanBookFiles(QWidget):
     """
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('扫描路径')
-        self.setGeometry(100, 100, 400, 200)
+        self.setWindowTitle('扫描路径')                                    # 设置窗口标题
+        self.setGeometry(1000, 700, 400, 200)                            # 设置窗口的位置和大小
 
         self.directory_label = QLabel('请选择扫描路径：')
         self.selected_directory_label = QLabel("")
@@ -34,16 +34,15 @@ class ScanBookFiles(QWidget):
         #  os.path.expanduser("~") 表示打开用户的主目录
         directory = QFileDialog.getExistingDirectory(self, "选择扫描路径", os.path.expanduser("~"))
         if directory:
-            self.selected_directory_label.setText(directory)  # 将用户选择的文件夹路径显示在标签控件上
+            self.selected_directory_label.setText(directory)                    # 将用户选择的文件夹路径显示在标签控件上
             project_root = os.path.dirname(os.path.abspath(__file__))           # 获取项目的根目录路径
             output_file = os.path.join(project_root, 'scanned_record.txt')      # 将扫描结果写入scanned_file.txt
             self.scan_book_files(directory, output_file)
         else:
-            QMessageBox.warning(self, "提示", "未选择路径！扫描已取消。", QMessageBox.Ok)
+            QMessageBox.warning(self, "提示", "未选择扫描路径！扫描已取消。", QMessageBox.Ok)
             self.close()
 
-    @staticmethod
-    def scan_book_files(directory: str, output_file: str, self=None):
+    def scan_book_files(self, directory: str, output_file: str):
         """
         扫描本地硬盘中的电子书，directory为待扫描文件所在路径；output_file为扫描记录的路径
         """
@@ -65,14 +64,12 @@ class ScanBookFiles(QWidget):
                 reply = QMessageBox.question(None, "提示", "扫描完成！是否继续扫描其他文件夹？",
                                              QMessageBox.Yes | QMessageBox.No)
                 if reply == QMessageBox.Yes:
-                    # 用户选择继续扫描，则递归调用自身，并传入新的文件夹路径
-                    new_directory = QFileDialog.getExistingDirectory(None, "选择扫描路径", os.path.expanduser("~"))
-                    if new_directory:
-                        ScanBookFiles.scan_book_files(new_directory, output_file)
+                    # 用户选择继续扫描，则再次调用select_directory()方法
+                    scan_book_files.select_directory()
                 else:
                     # 用户选择结束扫描，则显示提示信息
                     QMessageBox.information(None, "提示", "扫描已结束！", QMessageBox.Ok)
-
+                    self.close()
         except Exception as e:      # Exception是所有异常的基类，它代表了所有常见的错误类型
             print(f"在扫描文件时发生错误: {e}")
 
@@ -86,27 +83,41 @@ class Books:
 
     def __init__(
             self,
-            book_name, author,
-            nationality="", translator="",
-            publisher="", publication_date="",
-            level="", read_status="",
-            book_type="", isbn="",
-            pages="", read_progress="",
-            read_time="", read_date="",
-            read_link="", introduction=""
+            book_name,
+            author,
+            nationality="",
+            translator="",
+
+            publisher="",
+            publication_date="",
+            level="",
+            read_status="",
+
+            book_type="",
+            isbn="",
+            pages="",
+            read_progress="",
+
+            read_time="",
+            read_date="",
+            read_link="",
+            introduction=""
             ):
         self.book_name = book_name
         self.author = author
         self.nationality = nationality
         self.translator = translator
+
         self.publisher = publisher
         self.publication_date = publication_date
         self.level = level
         self.read_status = read_status
+
         self.book_type = book_type
         self.isbn = isbn
         self.pages = pages
         self.read_progress = read_progress
+
         self.read_time = read_time             # 阅读时长（单位：小时）
         self.read_date = read_date
         self.read_link = read_link            # 第三方阅读器或书籍评分网站（如豆瓣读书）的网址链接
@@ -116,8 +127,10 @@ class Books:
 
     def level(self):
         """统计书籍的评分情况，以一到五个⭐表示，分别表示书籍由低到高的评价"""
-        level_symbol = ['⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐']
+        default_symbol = ['⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐']    # 默认评价图标
+        custom_symbol = []                                                         # 用户自定义图标
         set_level = input()
+        custom_symbol.append(set_level)
 
     def read_status(self):
         """统计书籍的阅读状态"""
@@ -146,24 +159,46 @@ class PDFBooks(Books):
     """Books的子类：pdf格式电子书"""
     def __init__(
             self,
-            book_name, author,
-            nationality="", translator="",
-            publisher="", publication_date="",
-            level="", read_status="",
-            book_type="", isbn="",
-            pages="", read_progress="",
-            read_time="", read_date="",
-            read_link="", introduction=""
+            book_name,
+            author,
+            nationality="",
+            translator="",
+
+            publisher="",
+            publication_date="",
+            level="",
+            read_status="",
+
+            book_type="",
+            isbn="",
+            pages="",
+            read_progress="",
+
+            read_time="",
+            read_date="",
+            read_link="",
+            introduction=""
             ):
         super().__init__(
-            book_name, author,
-            nationality, translator,
-            publisher, publication_date,
-            level, read_status,
-            book_type, isbn,
-            pages, read_progress,
-            read_time, read_date,
-            read_link, introduction
+            book_name,
+            author,
+            nationality,
+            translator,
+
+            publisher,
+            publication_date,
+            level,
+            read_status,
+
+            book_type,
+            isbn,
+            pages,
+            read_progress,
+
+            read_time,
+            read_date,
+            read_link,
+            introduction
             )
 
     def edit_pdf(self):
@@ -175,24 +210,46 @@ class TxtBooks(Books):
     """Books的子类：txt格式电子书"""
     def __init__(
             self,
-            book_name, author,
-            nationality="", translator="",
-            publisher="", publication_date="",
-            level="", read_status="",
-            book_type="", isbn="",
-            pages="", read_progress="",
-            read_time="", read_date="",
-            read_link="", introduction=""
+            book_name,
+            author,
+            nationality="",
+            translator="",
+
+            publisher="",
+            publication_date="",
+            level="",
+            read_status="",
+
+            book_type="",
+            isbn="",
+            pages="",
+            read_progress="",
+
+            read_time="",
+            read_date="",
+            read_link="",
+            introduction=""
             ):
         super().__init__(
-            book_name, author,
-            nationality, translator,
-            publisher, publication_date,
-            level, read_status,
-            book_type, isbn,
-            pages, read_progress,
-            read_time, read_date,
-            read_link, introduction
+            book_name,
+            author,
+            nationality,
+            translator,
+
+            publisher,
+            publication_date,
+            level,
+            read_status,
+
+            book_type,
+            isbn,
+            pages,
+            read_progress,
+
+            read_time,
+            read_date,
+            read_link,
+            introduction
             )
 
     def edit_txt(self):
@@ -204,24 +261,46 @@ class EpubBooks(Books):
     """Books的子类：epub格式电子书"""
     def __init__(
             self,
-            book_name, author,
-            nationality="", translator="",
-            publisher="", publication_date="",
-            level="", read_status="",
-            book_type="", isbn="",
-            pages="", read_progress="",
-            read_time="", read_date="",
-            read_link="", introduction=""
+            book_name,
+            author,
+            nationality="",
+            translator="",
+
+            publisher="",
+            publication_date="",
+            level="",
+            read_status="",
+
+            book_type="",
+            isbn="",
+            pages="",
+            read_progress="",
+
+            read_time="",
+            read_date="",
+            read_link="",
+            introduction=""
             ):
         super().__init__(
-            book_name, author,
-            nationality, translator,
-            publisher, publication_date,
-            level, read_status,
-            book_type, isbn,
-            pages, read_progress,
-            read_time, read_date,
-            read_link, introduction
+            book_name,
+            author,
+            nationality,
+            translator,
+
+            publisher,
+            publication_date,
+            level,
+            read_status,
+
+            book_type,
+            isbn,
+            pages,
+            read_progress,
+
+            read_time,
+            read_date,
+            read_link,
+            introduction
             )
 
     def edit_epub(self):
@@ -229,7 +308,7 @@ class EpubBooks(Books):
 
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
+    app = QApplication(sys.argv)            # sys.argv用于获取当前正在执行的命令行参数的参数列表
     scan_book_files = ScanBookFiles()
     scan_book_files.show()
     sys.exit(app.exec_())
