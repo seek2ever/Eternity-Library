@@ -128,9 +128,7 @@ class Books:
     def level(self):
         """统计书籍的评分情况，以一到五个⭐表示，分别表示书籍由低到高的评价"""
         default_symbol = ['⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐']    # 默认评价图标
-        custom_symbol = []                                                         # 用户自定义图标
-        set_level = input()
-        custom_symbol.append(set_level)
+        custom_symbol = [self.level]  # 用户自定义图标
 
     def read_status(self):
         """统计书籍的阅读状态"""
@@ -144,11 +142,16 @@ class Books:
 
     def read_duration(self):
         """统计书籍的阅读时长，包括阅读的天数、阅读的小时数（可切换为x时x分的格式）"""
-        add_time = time.time()  # 添加书籍到书库时获取的系统时间
-        last_time = time.time()  # 最后一次阅读书籍或书籍标记为“阅读完成”时获取的系统时间
-        open_time = time.time()  # 每次阅读书籍时获取的系统时间
+        add_date = datetime.datetime.now()
+        add_time = time.time()                      # 添加书籍到书库时获取的系统时间
+        last_time = time.time()                     # 最后一次阅读书籍或书籍标记为“阅读完成”时获取的系统时间
+        open_time = time.time()                     # 每次阅读书籍时获取的系统时间
         # 此处执行打开书籍文件的操作
-        close_time = time.time()  # 每次关闭书籍时获取的系统时间
+        close_time = time.time()                    # 每次关闭书籍时获取的系统时间
+        read_date = datetime.datetime.now()
+        self.read_time = close_time - open_time     # 计算每次阅读的时长
+        total_time += self.read_time
+        total_date = read_date - add_date
 
     def book_animation(self):
         """控制电子书打开、关闭、翻页时的动画效果"""
