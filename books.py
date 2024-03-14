@@ -123,12 +123,10 @@ class Books:
         self.read_link = read_link            # 第三方阅读器或书籍评分网站（如豆瓣读书）的网址链接
         self.introduction = introduction
 
-        print(f"书籍名称：{self.book_name}\n作者：{self.author}\n出版社：{self.publisher}\n评分：{self.level}")
-
     def level(self):
         """统计书籍的评分情况，以一到五个⭐表示，分别表示书籍由低到高的评价"""
         default_symbol = ['⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐']    # 默认评价图标
-        custom_symbol = [self.level]  # 用户自定义图标
+        custom_symbol = [self.level]                                               # 用户自定义图标
 
     def read_status(self):
         """统计书籍的阅读状态"""
@@ -139,6 +137,8 @@ class Books:
             self.read_status = books_status[-1]  # 将阅读状态设置为“阅读完成”
         else:
             self.read_status = input()  # 由用户从给定的列表中选择阅读状态
+            books_status.append(self.read_status)
+            print(books_status)
 
     def read_duration(self):
         """统计书籍的阅读时长，包括阅读的天数、阅读的小时数（可切换为x时x分的格式）"""
@@ -311,7 +311,36 @@ class EpubBooks(Books):
 
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)            # sys.argv用于获取当前正在执行的命令行参数的参数列表
+    book = Books(
+        "Python编程：从入门到实践",
+        "Eric Matthews",
+        "美国",
+        "李军",
+        "人民邮电出版社",
+        "2016-11",
+        "⭐⭐⭐⭐⭐",
+        "100",
+        "专业书籍",
+        "978-7-115-50428-0",
+        "432",
+        "100",
+        "20",
+        "2024-03-14",
+        "https://book.douban.com/subject/26829016/",
+        "《Python编程：从入门到实践》是一本全面介绍Python编程的书籍，适合初学者。"
+    )
+    print(f"阅读时长：{book.read_time}小时")
+    print(f"阅读日期：{book.read_date}")
+    print(f"书籍简介：{book.introduction}")
+    print(f"书籍链接：{book.read_link}")
+    print(f"书籍状态：{book.read_status}")
+    print(f"书籍评分：", book.level.encode('gbk', 'ignore'))
+    print(f"书籍作者：{book.author}")
+    print(f"书籍出版社：{book.publisher}")
+    print(f"书籍页数：{book.pages}")
+    print(f"书籍ISBN码：{book.isbn}")
+
+    app = QApplication(sys.argv)  # sys.argv用于获取当前正在执行的命令行参数的参数列表
     scan_book_files = ScanBookFiles()
     scan_book_files.show()
     sys.exit(app.exec_())
