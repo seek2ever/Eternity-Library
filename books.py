@@ -38,27 +38,19 @@ class ScanBookFiles(QWidget):
 
     def select_directory(self):
         #  os.path.expanduser("~") 表示打开用户的主目录
-        directory = QFileDialog.getExistingDirectory(self, "选择扫描路径", os.path.expanduser("~"))
-        scanned_file = "scan_record.json"
-        if directory:
-            self.selected_directory_label.setText(directory)            # 将用户选择的文件夹路径显示在标签控件上
-            project_root = os.path.dirname(os.path.abspath(__file__))
-            # __file__表示当前脚本文件；os.path.abspath(__file__) 返回当前脚本文件的绝对路径，
-            # os.path.dirname() 对这个路径进行处理，只保留其目录部分，去掉文件名部分，从而得到当前脚本文件所在的目录路径
-
-            output_file = os.path.join(project_root, scanned_file)
-            # 将扫描结果记录文件（scan_record.json）与其路径拼接，形成完整路径，以便后续调用scan_book_files()时可以将扫描结果写入文件
-            self.scan_book_files(directory, output_file)                # 调用scan_book_files函数扫描文件夹中的电子书
+        scan_directory = QFileDialog.getExistingDirectory(self, "选择扫描路径", os.path.expanduser("~"))
+        if scan_directory:
+            self.selected_directory_label.setText(scan_directory)  # 将用户选择的文件夹路径显示在标签控件上
+            self.scan_book_files(scan_directory)  # 调用scan_book_files函数扫描文件夹中的电子书
         else:
             QMessageBox.warning(self, "提示", "未选择扫描路径！扫描已取消。", QMessageBox.Ok)
             self.close()
 
-    def scan_book_files(self, directory, output_file):
+    def scan_book_files(self, directory):
         """
         扫描本地硬盘中的电子书，directory为待扫描文件所在路径；output_file为扫描记录的路径
         """
-        global file_lists
-        file_lists = []
+        file_info = {}
         current_date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
 
         try:
@@ -67,11 +59,14 @@ class ScanBookFiles(QWidget):
             for root, dirs, files in os.walk(directory):
                 for file in files:
                     if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
-                        file_lists.append(os.path.join(root, file))
-            with open(output_file, 'a') as o_file:
-                for item in file_lists:
-                    o_file.write(item + '\n')
-                o_file.write(f" --- 本次扫描日期：{current_date} --- \n")
+                        file_info[file] = [root]
+                    else:
+                        print("未扫描到书籍文件，请手动检查相应路径。")
+
+                # 将扫描结果（存储在file_info字典中）写入scan_record.json
+                with open('scan_record.json', 'w') as of:
+                    json.dump(file_info, of)
+                    json.dump(f" --- 本次扫描日期：{current_date} --- \n", of)
 
                 # 显示询问弹窗，让用户决定是否继续扫描其他文件夹
                 reply = QMessageBox.question(None, "提示", "扫描完成！是否继续扫描其他文件夹？",
@@ -89,10 +84,8 @@ class ScanBookFiles(QWidget):
             QMessageBox.information(None, "提示", "系统找不到指定的路径，请重试。", QMessageBox.Ok)
         except PermissionError:
             QMessageBox.information(None, "提示", "扫描路径无访问权限，请检查路径权限。", QMessageBox.Ok)
-        except Exception:
-            QMessageBox.information(None, "提示", "遇到未知错误。", QMessageBox.Ok)
         else:
-            return file_lists
+            return None
 
 
 class Books:
