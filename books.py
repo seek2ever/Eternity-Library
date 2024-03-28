@@ -8,6 +8,7 @@ import time
 import datetime
 import json
 import fitz
+
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog, QVBoxLayout, QMessageBox
 from PyQt5.QtCore import Qt
 
@@ -48,10 +49,14 @@ class ScanBookFiles(QWidget):
 
     def scan_book_files(self, directory):
         """
-        扫描本地硬盘中的电子书，directory为待扫描文件所在路径；output_file为扫描记录的路径
+        扫描本地硬盘中的电子书，directory为待扫描文件所在路径
         """
-        file_info = {}
         current_date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
+        file_info = {}
+        file_record = {
+            "files": file_info,
+            "scan_date": f" --- 本次扫描日期：{current_date} ---"
+        }
 
         try:
             # os.walk函数将扫描的每个目录返回一个三元组，
@@ -59,14 +64,15 @@ class ScanBookFiles(QWidget):
             for root, dirs, files in os.walk(directory):
                 for file in files:
                     if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
-                        file_info[file] = [root]
+                        file_record['files'][file] = {"path": root}
                     else:
-                        print("未扫描到书籍文件，请手动检查相应路径。")
+                        QMessageBox.information(None, "提示", "未扫描到书籍文件，请手动检查相应路径。", QMessageBox.Ok)
+                        self.close()
 
                 # 将扫描结果（存储在file_info字典中）写入scan_record.json
-                with open('scan_record.json', 'w') as of:
-                    json.dump(file_info, of)
-                    json.dump(f" --- 本次扫描日期：{current_date} --- \n", of)
+                with open('scan_record.json', 'w') as f:
+                    json.dump(file_record, f, ensure_ascii=False, indent=4)
+                    # ensure_ascii=False 保证中文字符不被转义；indent=4（缩进4个空格）使json文件更易读
 
                 # 显示询问弹窗，让用户决定是否继续扫描其他文件夹
                 reply = QMessageBox.question(None, "提示", "扫描完成！是否继续扫描其他文件夹？",
@@ -121,6 +127,26 @@ class Books:
         self.read_date = read_date
         self.read_link = read_link  # 第三方阅读器或书籍评分网站（如豆瓣读书）的网址链接
         self.introduction = introduction
+
+    def add_book_info(self, book_filename, translator):
+        """允许用户手动添加书籍信息（如评分、译者、国籍等）到scan_record.json"""
+        # 加载现有的json文件
+        with open('scan_record.json', 'r') as f:
+            file_record = json.load(f)
+
+        # 确保 'files' 键存在，如果不存在则初始化为空字典
+        if 'files' not in file_record:
+            file_record['files'] = {}
+
+        # 查找并更新指定文件的条目，添加新的键值对
+        if book_filename in file_record['files']:
+            file_record['files'][book_filename]['translator'] = self.translator
+        else:
+            print(f"警告：'{book_filename}' 在扫描记录中未找到，无法添加译者信息。")
+
+        # 将更新后的数据写入json文件
+        with open('scan_record.json', 'w') as f:
+            json.dump(file_record, f, ensure_ascii=False, indent=4)
 
     def level(self):
         """统计书籍的评分情况，以一到五个⭐表示，分别表示书籍由低到高的评价"""
