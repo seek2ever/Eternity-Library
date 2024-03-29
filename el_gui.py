@@ -1,3 +1,7 @@
+"""
+此模块主要用于处理与GUI（图形用户界面）的代码，
+与书籍文件进行具体交互的功能放在books.py中
+"""
 import sys
 from books import ScanBookFiles
 from PyQt5 import QtCore, QtGui, QtWidgets
