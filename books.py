@@ -55,8 +55,9 @@ class ScanBookFiles(QWidget):
         file_info = {}
         file_record = {
             "files": file_info,
-            "scan_date": f" --- 本次扫描日期：{current_date} ---"
+            "scan_date": f"扫描日期：{current_date}"
         }
+        any_books_found = False  # 添加标志位，记录是否有电子书文件被找到
 
         try:
             # os.walk函数将扫描的每个目录返回一个三元组，
@@ -65,33 +66,69 @@ class ScanBookFiles(QWidget):
                 for file in files:
                     if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
                         file_record['files'][file] = {"path": root}
-                    else:
-                        QMessageBox.information(None, "提示", "未扫描到书籍文件，请手动检查相应路径。", QMessageBox.Ok)
-                        self.close()
+                        any_books_found = True  # 有电子书文件被找到时，标志位置为True
 
-                # 将扫描结果（存储在file_info字典中）写入scan_record.json
-                with open('scan_record.json', 'w') as f:
-                    json.dump(file_record, f, ensure_ascii=False, indent=4)
-                    # ensure_ascii=False 保证中文字符不被转义；indent=4（缩进4个空格）使json文件更易读
+            # 调用write_into_json方法，将扫描结果写入scan_record.json文件
+            self.write_into_json(file_record)
 
-                # 显示询问弹窗，让用户决定是否继续扫描其他文件夹
-                reply = QMessageBox.question(None, "提示", "扫描完成！是否继续扫描其他文件夹？",
-                                             QMessageBox.Yes | QMessageBox.No)
-                if reply == QMessageBox.Yes:
-                    # 用户选择继续扫描，则再次调用select_directory()方法
-                    scan_book_files.select_directory()
-                else:
-                    # 用户选择结束扫描，则显示提示信息
-                    QMessageBox.information(None, "提示", "扫描已结束！", QMessageBox.Ok)
-                    self.close()
+            # 没有上述格式文件存在时，显示提示信息
+            if not any_books_found:
+                QMessageBox.information(None, "提示", "未扫描到书籍文件，请手动检查相应路径。", QMessageBox.Ok)
+                self.close()
 
         # 扫描遇到错误时执行以下语句
         except FileNotFoundError:
             QMessageBox.information(None, "提示", "系统找不到指定的路径，请重试。", QMessageBox.Ok)
+            self.close()
         except PermissionError:
             QMessageBox.information(None, "提示", "扫描路径无访问权限，请检查路径权限。", QMessageBox.Ok)
+            self.close()
+
         else:
-            return None
+            # 显示询问弹窗，让用户决定是否继续扫描其他文件夹
+            reply = QMessageBox.question(None, "提示", "是否继续扫描其他文件夹？",
+                                         QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                # 用户选择继续扫描，则再次调用select_directory()方法
+                ScanBookFiles().select_directory()
+            else:
+                # 用户选择结束扫描，则显示提示信息
+                QMessageBox.information(None, "提示", "扫描已结束！", QMessageBox.Ok)
+                self.close()
+
+    def write_into_json(self, file_rec):
+        """将当前扫描结果与之前的扫描记录合并后，写入scan_record.json文件"""
+        try:
+            # 读取原文件内容（如果为空或不存在，则初始化为空列表）
+            with open('scan_record.json', 'r') as f:
+                try:
+                    existing_data = json.load(f)
+
+                # 如果json文件为空或数据不符合json语法规范，就会触发此错误，随后执行将文件初始化为空字典的操作
+                except json.JSONDecodeError:
+                    existing_data = {"files": {}, "scan_date": ''}
+
+            # 合并新的扫描日期和文件信息
+            if isinstance(existing_data, dict):  # 检查变量existing_data是否为字典类型（dict）
+                if 'scan_date' in existing_data:
+                    existing_data['scan_date'].append(file_rec['scan_date'])
+                else:
+                    existing_data['scan_date'] = [file_rec['scan_date']]
+
+                for file_name, info in file_rec['files'].items():
+                    existing_data['files'][file_name] = info
+
+            # 将扫描结果（存储在file_info字典中）写入scan_record.json
+            with open('scan_record.json', 'w') as f:
+                json.dump(existing_data, f, ensure_ascii=False, indent=4)
+                # ensure_ascii=False 保证中文字符不被转义；indent=4（缩进4个空格）使json文件更易读
+
+        except FileNotFoundError:
+            QMessageBox.information(None, "提示", "系统找不到指定的路径，请检查scan_record.json是否存在。",
+                                    QMessageBox.Ok)
+        else:
+            QMessageBox.information(None, "提示", "扫描结果已写入scan_record.json文件！", QMessageBox.Ok)
+            self.close()
 
 
 class Books:
@@ -128,8 +165,12 @@ class Books:
         self.read_link = read_link  # 第三方阅读器或书籍评分网站（如豆瓣读书）的网址链接
         self.introduction = introduction
 
-    def add_book_info(self, book_filename, translator):
-        """允许用户手动添加书籍信息（如评分、译者、国籍等）到scan_record.json"""
+    def add_books(self):
+        """允许用户手动从本地硬盘中添加书籍文件到书库"""
+        pass
+
+    def add_book_info(self, book_filename, book_info) -> object:
+        """允许用户手动添加其它书籍信息（如评分、译者、国籍等）到scan_record.json"""
         # 加载现有的json文件
         with open('scan_record.json', 'r') as f:
             file_record = json.load(f)
@@ -140,7 +181,7 @@ class Books:
 
         # 查找并更新指定文件的条目，添加新的键值对
         if book_filename in file_record['files']:
-            file_record['files'][book_filename]['translator'] = self.translator
+            file_record['files'][book_filename][book_info] = book_info
         else:
             print(f"警告：'{book_filename}' 在扫描记录中未找到，无法添加译者信息。")
 
@@ -148,7 +189,9 @@ class Books:
         with open('scan_record.json', 'w') as f:
             json.dump(file_record, f, ensure_ascii=False, indent=4)
 
-    def level(self):
+        return None
+
+    def book_level(self):
         """统计书籍的评分情况，以一到五个⭐表示，分别表示书籍由低到高的评价"""
         default_symbol = ['⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐']  # 默认评价图标
         custom_symbol = [self.level]  # 用户自定义图标
@@ -268,7 +311,5 @@ if __name__ == '__main__':
         "Eric Matthews",
     )
     app = QApplication(sys.argv)  # 创建PyQt应用程序，sys.argv用于获取当前正在执行的命令行参数的参数列表
-    scan_book_files = ScanBookFiles()
-    scan_book_files.select_directory()
-    scan_book_files.show()  # 显示窗口
+    add_book = Books.add_book_info(book, "Python编程：从入门到实践", "译者：袁国忠")
     sys.exit(app.exec_())
