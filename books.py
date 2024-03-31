@@ -63,18 +63,13 @@ class ScanBookFiles(QWidget):
                     else:
                         print("未扫描到书籍文件，请手动检查相应路径。")
 
-                # 将扫描结果（存储在file_info字典中）写入scan_record.json
-                with open('scan_record.json', 'w') as of:
-                    json.dump(file_info, of)
-                    json.dump(f" --- 本次扫描日期：{current_date} --- \n", of)
-
                 # 显示询问弹窗，让用户决定是否继续扫描其他文件夹
                 reply = QMessageBox.question(None, "提示", "扫描完成！是否继续扫描其他文件夹？",
                                              QMessageBox.Yes | QMessageBox.No)
                 if reply == QMessageBox.Yes:
                     # 用户选择继续扫描，则再次调用select_directory()方法
                     scan_book_files.select_directory()
-                else:
+                elif reply == QMessageBox.No:
                     # 用户选择结束扫描，则显示提示信息
                     QMessageBox.information(None, "提示", "扫描已结束！", QMessageBox.Ok)
                     self.close()
@@ -85,7 +80,10 @@ class ScanBookFiles(QWidget):
         except PermissionError:
             QMessageBox.information(None, "提示", "扫描路径无访问权限，请检查路径权限。", QMessageBox.Ok)
         else:
-            return None
+            # 将扫描结果（存储在file_info字典中）写入scan_record.json
+            with open('scan_record.json', 'w') as of:
+                json.dump(file_info, of)
+                json.dump(f" --- 本次扫描日期：{current_date} --- \n", of)
 
 
 class Books:
