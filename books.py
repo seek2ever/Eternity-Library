@@ -29,11 +29,11 @@ class ScanBookFiles(QWidget):
         self.select_button = QPushButton('选择路径')
         self.select_button.clicked.connect(self.select_directory)  # type: ignore
 
-        layout = QVBoxLayout()
+        layout = QVBoxLayout()  # 创建垂直布局
         layout.setAlignment(Qt.AlignCenter)                 # 设置布局居中
-        layout.addWidget(self.directory_label)              # 将标签控件添加到布局中
-        layout.addWidget(self.selected_directory_label)     # 将标签控件添加到布局中
-        layout.addWidget(self.select_button)                # 将按钮控件添加到布局中
+        layout.addWidget(self.directory_label)  # 将显示“选择扫描路径”的标签控件添加到布局中
+        layout.addWidget(self.selected_directory_label)  # 将用户所选路径的标签控件添加到布局中
+        layout.addWidget(self.select_button)  # 将“选择路径”的按钮控件添加到布局中
         self.setLayout(layout)                              # 将布局应用到窗口中
 
     def select_directory(self):
@@ -50,40 +50,80 @@ class ScanBookFiles(QWidget):
         """
         扫描本地硬盘中的电子书，directory为待扫描文件所在路径；output_file为扫描记录的路径
         """
-        file_info = {}
         current_date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
-
+        book_info = {}
+        scan_info = {
+            'files': book_info,
+            'scan_date': f"扫描日期：{current_date}"
+        }
+        any_books_found = False  # 添加标志位，表示此时尚未有任何电子书文件被找到
         try:
-            # os.walk函数将扫描的每个目录返回一个三元组，
             # 包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
             for root, dirs, files in os.walk(directory):
                 for file in files:
                     if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
-                        file_info[file] = [root]
-                    else:
-                        print("未扫描到书籍文件，请手动检查相应路径。")
+                        scan_info['files'][file] = {"path": root}
+                        any_books_found = True  # 有电子书文件被找到时，标志位置为True
+            scan_info['scan_date'] = current_date
 
-                # 显示询问弹窗，让用户决定是否继续扫描其他文件夹
-                reply = QMessageBox.question(None, "提示", "扫描完成！是否继续扫描其他文件夹？",
-                                             QMessageBox.Yes | QMessageBox.No)
-                if reply == QMessageBox.Yes:
-                    # 用户选择继续扫描，则再次调用select_directory()方法
-                    scan_book_files.select_directory()
-                elif reply == QMessageBox.No:
-                    # 用户选择结束扫描，则显示提示信息
-                    QMessageBox.information(None, "提示", "扫描已结束！", QMessageBox.Ok)
-                    self.close()
+            if not any_books_found:
+                choose = QMessageBox.question(None, "提示", f"未扫描到书籍文件，是否手动检查以下路径：\n{directory}？",
+                                              QMessageBox.Yes | QMessageBox.No)
+                if choose == QMessageBox.Yes:
+                    os.startfile(directory)  # 打开相应的文件夹
+
+            # 显示询问弹窗，让用户决定是否继续扫描其他文件夹
+            reply = QMessageBox.question(None, "提示", "扫描完成！是否继续扫描其他文件夹？",
+                                         QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                # 用户选择继续扫描，则再次调用select_directory()方法
+                self.select_directory()
+            elif reply == QMessageBox.No:
+                # 用户选择结束扫描，则显示提示信息
+                QMessageBox.information(None, "提示", "扫描已结束！", QMessageBox.Ok)
+                self.close()
+                # 目前已知问题：点击确定按钮后，窗口会关闭，但选择扫描路径的窗口仍然存在，需要手动关闭
 
         # 扫描遇到错误时执行以下语句
         except FileNotFoundError:
+            QMessageBox.information(None, "提示", "系统找不到指定的文件，请重试。", QMessageBox.Ok)
+        except NotADirectoryError:
             QMessageBox.information(None, "提示", "系统找不到指定的路径，请重试。", QMessageBox.Ok)
         except PermissionError:
             QMessageBox.information(None, "提示", "扫描路径无访问权限，请检查路径权限。", QMessageBox.Ok)
         else:
-            # 将扫描结果（存储在file_info字典中）写入scan_record.json
-            with open('scan_record.json', 'w') as of:
-                json.dump(file_info, of)
-                json.dump(f" --- 本次扫描日期：{current_date} --- \n", of)
+            # 扫描未引发任何异常时，将扫描结果（存储在book_info字典中）写入scan_record.json
+            self.write_into_json(scan_info)
+
+    def write_into_json(self, f_record):
+        """将扫描结果写入json文件"""
+        # 判断json文件是否存在，不存在则新建一个编码为UTF-8的json文件
+        if not os.path.exists('scan_record.json'):
+            with open('scan_record.json', 'w', encoding='utf-8') as wf:
+                QMessageBox.information(None, "提示", "扫描记录文件不存在，已新建。", QMessageBox.Ok)
+
+        else:
+            # 读取json文件
+            with open('scan_record.json', 'r') as rf:
+                scan_record = json.load(rf)
+            # 写入json文件
+            with open('scan_record.json', 'w', encoding='utf-8') as wf:
+                json.dump(f_record, wf)
+
+
+class Tips(QWidget):
+    """提示框类，用于显示提示信息"""
+
+    def __init__(self):
+        super().__init__()
+
+    def show_tips(self, tip):
+        """显示提示信息的对话框"""
+        QMessageBox.information(None, "提示", tip, QMessageBox.Ok)
+
+    def show_warning(self, warning):
+        """显示警告信息的对话框"""
+        QMessageBox.warning(None, "警告", warning, QMessageBox.Ok)
 
 
 class Books:
@@ -240,7 +280,7 @@ if __name__ == '__main__':
         "Eric Matthews",
     )
     app = QApplication(sys.argv)  # 创建PyQt应用程序，sys.argv用于获取当前正在执行的命令行参数的参数列表
-    scan_book_files = ScanBookFiles()
-    scan_book_files.select_directory()
-    scan_book_files.show()  # 显示窗口
+    scan_book = ScanBookFiles()
+    scan_book.select_directory()
+    scan_book.show()  # 显示窗口
     sys.exit(app.exec_())
