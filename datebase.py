@@ -53,14 +53,16 @@ class DatabaseManager:
         sql = "SELECT book_id FROM books_information WHERE book_name=?"
         self.cursor.execute(sql, (book_name,))
         result = self.cursor.fetchone()
+        # 如果存在匹配的记录，将查询结果的第一个元素赋值给变量result；否则，将变量result设为None
+        result = result[0] if result else None
 
         # 如果不存在，则生成新的ID
         if result is None:
             while True:
-                new_id = random.randint(1000000000, 9999999999)
+                book_id = random.randint(1000000000, 9999999999)
                 # 查询数据库中是否已经存在该书籍对应的ID
                 check_sql = "SELECT 1 FROM books_information WHERE book_id=?"
-                self.cursor.execute(check_sql, (new_id,))
+                self.cursor.execute(check_sql, (book_id,))
                 existing_id_result = self.cursor.fetchone()
 
                 # 如果不存在，则使用新生成的ID并更新数据库，退出循环
@@ -68,9 +70,8 @@ class DatabaseManager:
                     break
 
             update_sql = "UPDATE books_information SET book_id=? WHERE book_name=?"
-            self.cursor.execute(update_sql, (new_id, book_name))
+            self.cursor.execute(update_sql, (book_id, book_name))
             self.connection.commit()
-            return new_id
 
     def delete_book(self, book_name):
         """
@@ -94,15 +95,15 @@ class DatabaseManager:
         self.cursor.execute(sql, values)
         self.connection.commit()
 
-    def get_books(self):
+    def get_books(self, book_name):
         """
         获取所有书籍信息
         :return: 书籍信息列表
         """
-        sql = "SELECT * FROM books_information"
-        self.cursor.execute(sql)
+        sql = "SELECT * FROM books_information WHERE book_name=?"
+        self.cursor.execute(sql, (book_name,))
         books = self.cursor.fetchall()
-        return books
+        print(books)
 
     def close(self):
         self.cursor.close()
@@ -112,10 +113,8 @@ class DatabaseManager:
 if __name__ == '__main__':
     db = DatabaseManager()
     db.create_table()
-    db.add_book(
-        book_name='活着'
-    )
     db.set_book_id(
         book_name='活着'
     )
+    db.get_books('活着')
     db.close()                  # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露
