@@ -7,3 +7,7 @@
 4.每日阅读情况热力图；  
 5.生成书籍阅读状态的甘特图，便于查看阅读的中断情况；  
 6.年度阅读报告生成与分享。
+  
+## 项目笔记  
+### ScanBookFiles类中scan_book_files方法：
+1. any_books_found = False，用于判断是否有新书被添加，若有则在最后返回True，否则返回False；使用if not any_books_found进行判断时，若any_books_found为False（即if not any_books_found的值为Ture）时，满足Python的真值测试（在Python中，if后面的条件为True时执行后面的代码，否则跳过）；
