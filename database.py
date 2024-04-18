@@ -1,18 +1,22 @@
+import os
+import re
 import sqlite3
 import random
 
 
 class DatabaseManager:
     def __init__(self, db_name='books_information.db'):
-        self.db_name = db_name  # 数据库名称
-        self.connection = sqlite3.connect(self.db_name)  # 连接到数据库
-        self.cursor = self.connection.cursor()  # 创建一个Cursor（游标）对象，用于执行SQL语句
+        self.db_name = db_name                              # 数据库名称
+        self.connection = sqlite3.connect(self.db_name)     # 连接到数据库
+        self.cursor = self.connection.cursor()              # 创建一个Cursor（游标）对象，用于执行SQL语句
 
     def create_table(self):
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS books_information (
                 book_id INTEGER,
                 book_name TEXT NOT NULL,
+                book_path TEXT,
+                add_time TEXT,
                 author TEXT,
                 nationality TEXT,
                 translator TEXT,
@@ -32,16 +36,52 @@ class DatabaseManager:
         """)
         self.connection.commit()
 
-    def add_book(self, **kwargs):  # 以关键字参数的形式接收书籍信息
+    def add_column(self, table_name, column_name, column_type='TEXT'):
         """
-        添加书籍信息
+        添加新的列
+        :param table_name：表名
+        :param column_name: 列名
+        :param column_type: 列类型
+        """
+        sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+        self.cursor.execute(sql)
+        self.connection.commit()
+
+    def _generate_unique_book_name(self, initial_book_name):
+        """
+        生成唯一的书籍名称，如果书籍名称与已存在书籍重复，自动为其添加数字后缀进行重命名。
+        :param initial_book_name: 初始书籍名称
+        :return: 生成的唯一书籍名称
+        """
+        suffix = 1
+        base_name, ext = os.path.splitext(initial_book_name)  # 分离文件名和扩展名（假设书籍名称包含扩展名）
+
+        while True:
+            unique_book_name = f"{base_name}_{suffix}{ext}" if suffix > 1 else initial_book_name
+            sql = "SELECT COUNT(*) FROM books_information WHERE book_name = ?"
+            self.cursor.execute(sql, (unique_book_name,))
+            count = self.cursor.fetchone()[0]
+
+            if count == 0:
+                return unique_book_name
+
+            suffix += 1
+
+    def add_book(self, **kwargs):   # 以关键字参数的形式（如book_name='xxx', author='xxx'）接收书籍信息
+        """
+        添加书籍信息，如果书籍名称与已存在书籍重复，自动为其添加数字后缀进行重命名。
         :param kwargs: 书籍信息
         """
-        columns = ', '.join(kwargs.keys())  # 以逗号分隔的列名
-        placeholders = ', '.join(['?'] * len(kwargs))  # 以逗号分隔的占位符
-        sql = f"INSERT INTO books_information ({columns}) VALUES ({placeholders})"  # SQL语句
-        self.cursor.execute(sql, tuple(kwargs.values()))  # 执行SQL语句
-        self.connection.commit()  # 提交事务
+        book_name = kwargs['book_name']
+        unique_book_name = self._generate_unique_book_name(book_name)
+        kwargs['book_name'] = unique_book_name  # 使用重命名后的书籍名称
+
+        columns = ', '.join(kwargs.keys())                  # 以逗号分隔的列名
+        placeholders = ', '.join(['?'] * len(kwargs))       # 以逗号分隔的占位符
+        sql = f"INSERT INTO books_information ({columns}) VALUES ({placeholders})"
+        self.cursor.execute(sql, tuple(kwargs.values()))    # 执行SQL语句
+        self.set_book_id(book_name)
+        self.connection.commit()                            # 提交事务
 
     def set_book_id(self, book_name):
         """
@@ -60,15 +100,16 @@ class DatabaseManager:
         if result is None:
             while True:
                 book_id = random.randint(1000000000, 9999999999)
-                # 查询数据库中是否已经存在该书籍对应的ID
+                # 查询数据库中是否已经存在相同ID，确保生成的ID不与数据库中已有的ID重复
                 check_sql = "SELECT 1 FROM books_information WHERE book_id=?"
                 self.cursor.execute(check_sql, (book_id,))
                 existing_id_result = self.cursor.fetchone()
 
-                # 如果不存在，则使用新生成的ID并更新数据库，退出循环
+                # 如果不存在重复ID，则使用新生成的ID，退出循环
                 if existing_id_result is None:
                     break
 
+            # 更新书籍的ID
             update_sql = "UPDATE books_information SET book_id=? WHERE book_name=?"
             self.cursor.execute(update_sql, (book_id, book_name))
             self.connection.commit()
@@ -84,7 +125,7 @@ class DatabaseManager:
 
     def update_book(self, book_name, **kwargs):
         """
-        更新书籍信息
+        更新书籍信息(增加、修改或删除相关信息)
         :param book_name: 书籍名称
         :param kwargs: 更新的书籍信息
         """
@@ -95,12 +136,14 @@ class DatabaseManager:
         self.cursor.execute(sql, values)
         self.connection.commit()
 
-    def get_books(self, book_name):
+    def get_book(self, book_name, columns=None):
         """
-        获取所有书籍信息
+        获取指定书籍的部分信息（默认返回所有信息）
+        :param book_name：书籍名称
+        :param columns：指定要获取的列名列表，默认为None，表示获取所有列
         :return: 书籍信息列表
         """
-        sql = "SELECT * FROM books_information WHERE book_name=?"
+        sql = f"SELECT {columns} FROM books_information WHERE book_name=?"
         self.cursor.execute(sql, (book_name,))
         books = self.cursor.fetchall()
         print(books)
@@ -113,8 +156,9 @@ class DatabaseManager:
 if __name__ == '__main__':
     db = DatabaseManager()
     db.create_table()
-    db.set_book_id(
-        book_name='活着'
+    db.update_book(
+        book_name='《西游记》',
+        nationality='China🟧',
+        level='⭐⭐⭐⭐⭐'
     )
-    db.get_books('活着')
     db.close()                  # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露
