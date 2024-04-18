@@ -6,10 +6,11 @@ import os
 import sys
 import time
 import datetime
-import json
 import fitz
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog, QVBoxLayout, QMessageBox
 from PyQt5.QtCore import Qt
+
+from database import DatabaseManager
 
 
 class ScanBookFiles(QWidget):
@@ -51,20 +52,16 @@ class ScanBookFiles(QWidget):
         扫描本地硬盘中的电子书，directory为待扫描文件所在路径；output_file为扫描记录的路径
         """
         current_date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
-        book_info = {}
-        scan_info = {
-            'files': book_info,
-            'scan_date': f"扫描日期：{current_date}"
-        }
+        scan_info = []
         any_books_found = False  # 添加标志位，表示此时尚未有任何电子书文件被找到
         try:
             # 包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
             for root, dirs, files in os.walk(directory):
                 for file in files:
                     if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
-                        scan_info['files'][file] = {"path": root}
                         any_books_found = True  # 有电子书文件被找到时，标志位置为True
-            scan_info['scan_date'] = current_date
+                        book_info = {"book_name": file, "book_path": root, "add_time": current_date}
+                        scan_info.append(book_info)
 
             if not any_books_found:
                 choose = QMessageBox.question(None, "提示", f"未扫描到书籍文件，是否手动检查以下路径：\n{directory}？",
@@ -92,23 +89,16 @@ class ScanBookFiles(QWidget):
         except PermissionError:
             QMessageBox.information(None, "提示", "扫描路径无访问权限，请检查路径权限。", QMessageBox.Ok)
         else:
-            # 扫描未引发任何异常时，将扫描结果（存储在book_info字典中）写入scan_record.json
-            self.write_into_json(scan_info)
+            # 扫描未引发任何异常时，将扫描结果（存储在book_info字典中）写入数据库
+            self.write_into_database(scan_info)
+            # print(scan_info)
 
-    def write_into_json(self, f_record):
-        """将扫描结果写入json文件"""
-        # 判断json文件是否存在，不存在则新建一个编码为UTF-8的json文件
-        if not os.path.exists('scan_record.json'):
-            with open('scan_record.json', 'w', encoding='utf-8') as wf:
-                QMessageBox.information(None, "提示", "扫描记录文件不存在，已新建。", QMessageBox.Ok)
-
-        else:
-            # 读取json文件
-            with open('scan_record.json', 'r') as rf:
-                scan_record = json.load(rf)
-            # 写入json文件
-            with open('scan_record.json', 'w', encoding='utf-8') as wf:
-                json.dump(f_record, wf)
+    def write_into_database(self, scan_info):
+        """将扫描结果写入数据库"""
+        db = DatabaseManager()
+        for i in scan_info:
+            db.add_book(**i)  # 将扫描结果写入数据库
+        db.close()
 
 
 class Tips(QWidget):
