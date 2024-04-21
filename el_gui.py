@@ -1,18 +1,23 @@
 import sys
-from books import ScanBookFiles
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import Qt, QCoreApplication
 from PyQt5.QtWidgets import QMainWindow, QApplication
+
+from books import ScanBookFiles
+from database import DatabaseManager
 
 
 class MyWindow(QMainWindow):
     def __init__(self):                         # 初始化窗口
         super().__init__()                      # 调用父类的初始化方法
+        self.listWidget = None
         self.scanButton = None
         self.pushButton = None
         self.statusbar = None
         self.menubar = None
         self.setup_ui()                         # 设置窗口的属性
+        self.get_book_info()
 
     def setup_ui(self):
         # 创建主窗口
@@ -51,6 +56,16 @@ class MyWindow(QMainWindow):
         self.scanButton.setText(self._translate("Scan Files", "扫描文件"))
         self.scanButton.clicked.connect(self.scan_books)                # 设置按钮的点击事件
 
+        # 添加列表框
+        self.listWidget = QtWidgets.QListWidget(self)
+        self.listWidget.setGeometry(QtCore.QRect(10, 60, 300, 900))
+        self.listWidget.setObjectName("listWidget")
+        self.listWidget.setViewMode(QtWidgets.QListView.ListMode)
+        self.listWidget.setWordWrap(True)
+        self.listWidget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)     # 设置列表框的选中模式
+        self.listWidget.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectItems)       # 设置列表框的选中行为
+        self.listWidget.itemClicked.connect(self.get_book_info)
+
     def _translate(self, context, text):
         """翻译标题栏文本"""
         return QCoreApplication.translate(context, text)
@@ -58,7 +73,15 @@ class MyWindow(QMainWindow):
     def scan_books(self):
         """扫描文件按钮点击事件，调用ScanBookFiles类的select_directory方法"""
         scan_dialog = ScanBookFiles()                      # 创建ScanBookFiles类的实例
-        scan_dialog.select_directory()                     # 调用select_directory方法
+        selected_files = scan_dialog.select_directory()                     # 调用select_directory方法
+
+    def get_book_info(self):
+        """获取书籍信息"""
+        book_db = DatabaseManager()
+        book_db.get_book(book_name='test_book')
+        self.listWidget.clear()
+        for book in book_db.get_book(book_name='test_book'):
+            self.listWidget.addItem(book)
 
 
 if __name__ == '__main__':

@@ -118,7 +118,7 @@ class DatabaseManager:
     def delete_book(self, book_name, book_id=None):
         """
         删除书籍信息
-        :param book_id:
+        :param book_id：书籍ID
         :param book_name: 书籍名称
         """
         sql = "DELETE FROM books_information WHERE book_name=?"
@@ -146,23 +146,42 @@ class DatabaseManager:
         self.cursor.execute(sql, values)
         self.connection.commit()
 
+    def check_book_info(self, book_name):
+        """
+        检查书籍是否存在于数据库中
+        :param book_name: 书籍名称
+        :return: 如果书籍存在，返回True；否则，返回False
+        """
+        sql = "SELECT * FROM books_information WHERE book_name=?"
+        self.cursor.execute(sql, (book_name,))
+        return self.cursor.fetchone() is not None
+
     def get_book(self, book_name, columns=None):
         """
         获取指定书籍的部分信息（默认返回所有信息）
         :param book_name：书籍名称
-        :param columns：指定要获取的列名列表，默认为None，表示
+        :param columns：指定要获取的列名列表，默认为None，表示获取书籍的所有信息
         :return: 书籍信息列表
         """
         try:
-            sql = f"SELECT {columns} FROM books_information WHERE book_name=?"
-            self.cursor.execute(sql, (book_name,))
-            books = self.cursor.fetchall()
+            sql_check = f"SELECT {book_name} FROM books_information WHERE book_name=?"
+            self.cursor.execute(sql_check, (book_name,))
         except sqlite3.OperationalError:
-            print(f'没有查询到名为"{book_name}"的书籍，请输入要查询的项目。')
-            # print(f'没有查询到名为"{book_name}"的书籍，请重试。')
+            return f'没有查询到名为"{book_name}"的书籍，请重试。'
         else:
-            print(books)
-            return None
+            # 如果指定了要获取的列名，则根据指定的列名查询书籍信息
+            if columns is not None:
+                sql = f"SELECT {columns} FROM books_information WHERE book_name=?"
+                self.cursor.execute(sql, (book_name,))
+                books = self.cursor.fetchall()
+                return books
+
+            # 如果没有指定要获取的列名，则查询书籍的所有信息
+            else:
+                sql = f"SELECT * FROM books_information WHERE book_name=?"
+                self.cursor.execute(sql, (book_name,))
+                books = self.cursor.fetchall()
+                return books
 
     def close(self):
         self.cursor.close()
@@ -171,5 +190,6 @@ class DatabaseManager:
 
 if __name__ == '__main__':
     db = DatabaseManager()
-    db.get_book('兴盛与危机.pdf')
+    s = db.get_book('学术规范导论.pdf')
+    print(s)
     db.close()                  # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露

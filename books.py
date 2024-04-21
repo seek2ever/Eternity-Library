@@ -31,11 +31,11 @@ class ScanBookFiles(QWidget):
         self.select_button.clicked.connect(self.select_directory)  # type: ignore
 
         layout = QVBoxLayout()  # 创建垂直布局
-        layout.setAlignment(Qt.AlignCenter)                 # 设置布局居中
+        layout.setAlignment(Qt.AlignCenter)  # 设置布局居中
         layout.addWidget(self.directory_label)  # 将显示“选择扫描路径”的标签控件添加到布局中
         layout.addWidget(self.selected_directory_label)  # 将用户所选路径的标签控件添加到布局中
         layout.addWidget(self.select_button)  # 将“选择路径”的按钮控件添加到布局中
-        self.setLayout(layout)                              # 将布局应用到窗口中
+        self.setLayout(layout)  # 将布局应用到窗口中
 
     def select_directory(self):
         #  os.path.expanduser("~") 表示打开用户的主目录
@@ -53,17 +53,22 @@ class ScanBookFiles(QWidget):
         """
         current_date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
         scan_info = []
-        any_books_found = False  # 添加标志位，表示此时尚未有任何电子书文件被找到
+        books_found = False  # 添加标志位，表示此时尚未有任何电子书文件被找到
         try:
             # 包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
             for root, dirs, files in os.walk(directory):
                 for file in files:
                     if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
-                        any_books_found = True  # 有电子书文件被找到时，标志位置为True
-                        book_info = {"book_name": file, "book_path": root, "add_time": current_date}
+                        books_found = True  # 有电子书文件被找到时，标志位置为True
+                        book_info = {
+                            "book_name": file,
+                            "book_path": root,
+                            "add_time": current_date
+                        }
                         scan_info.append(book_info)
 
-            if not any_books_found:
+            # 如果没有找到任何电子书文件，则显示提示信息
+            if not books_found:
                 choose = QMessageBox.question(None, "提示", f"未扫描到书籍文件，是否手动检查以下路径：\n{directory}？",
                                               QMessageBox.Yes | QMessageBox.No)
                 if choose == QMessageBox.Yes:
@@ -91,7 +96,6 @@ class ScanBookFiles(QWidget):
         else:
             # 扫描未引发任何异常时，将扫描结果（存储在book_info字典中）写入数据库
             self.write_into_database(scan_info)
-            # print(scan_info)
 
     def write_into_database(self, scan_info):
         """将扫描结果写入数据库"""
