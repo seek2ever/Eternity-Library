@@ -8,5 +8,6 @@
     <orderEntry type="jdk" jdkName="Python 3.9 (Eternity-Library)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="Python Project" />
+    <orderEntry type="module" module-name="PyQt5-code" />
   </component>
 </module>

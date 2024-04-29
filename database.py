@@ -164,7 +164,7 @@ class DatabaseManager:
         :return: 书籍信息列表
         """
         try:
-            sql_check = f"SELECT {book_name} FROM books_information WHERE book_name=?"
+            sql_check = f"SELECT * FROM books_information WHERE book_name=?"
             self.cursor.execute(sql_check, (book_name,))
         except sqlite3.OperationalError:
             return f'没有查询到名为"{book_name}"的书籍，请重试。'
@@ -190,6 +190,6 @@ class DatabaseManager:
 
 if __name__ == '__main__':
     db = DatabaseManager()
-    s = db.get_book('学术规范导论.pdf')
+    s = db.get_book(book_name='学术规范导论.pdf')
     print(s)
     db.close()                  # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露

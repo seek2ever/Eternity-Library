@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/PyQt5.iml" filepath="$PROJECT_DIR$/.idea/PyQt5.iml" />
+      <module fileurl="file://$USER_HOME$/PycharmProjects/PyQt5-code/.idea/PyQt5-code.iml" filepath="$USER_HOME$/PycharmProjects/PyQt5-code/.idea/PyQt5-code.iml" />
       <module fileurl="file://$PROJECT_DIR$/../PythonProject/.idea/Python Project.iml" filepath="$PROJECT_DIR$/../PythonProject/.idea/Python Project.iml" />
     </modules>
   </component>
