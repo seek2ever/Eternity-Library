@@ -153,8 +153,12 @@ class DatabaseManager:
         :return: 如果书籍存在，返回True；否则，返回False
         """
         sql = "SELECT * FROM books_information WHERE book_name=?"
+        checked = "未找到相应书籍"
         self.cursor.execute(sql, (book_name,))
-        return self.cursor.fetchone() is not None
+        if not None:
+            return self.cursor.fetchone()
+        else:
+            return checked
 
     def get_book(self, book_name, columns=None):
         """
@@ -183,6 +187,16 @@ class DatabaseManager:
                 books = self.cursor.fetchall()
                 return books
 
+    def get_all_books(self):
+        """
+        获取所有书籍的信息
+        :return: 所有书籍的信息列表
+        """
+        sql = "SELECT * FROM books_information"
+        self.cursor.execute(sql)
+        books = self.cursor.fetchall()
+        return books
+
     def close(self):
         self.cursor.close()
         self.connection.close()
@@ -190,6 +204,6 @@ class DatabaseManager:
 
 if __name__ == '__main__':
     db = DatabaseManager()
-    s = db.get_book(book_name='学术规范导论.pdf')
+    s = db.get_book(book_name='学术规范导论.pdf')     # 查询的结果为list形式，书籍信心在list中以元组的形式存在（即[(book,path,...)]
     print(s)
     db.close()                  # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露

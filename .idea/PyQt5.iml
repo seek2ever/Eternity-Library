@@ -10,4 +10,7 @@
     <orderEntry type="module" module-name="Python Project" />
     <orderEntry type="module" module-name="PyQt5-code" />
   </component>
+  <component name="PackageRequirementsSettings">
+    <option name="requirementsPath" value="" />
+  </component>
 </module>

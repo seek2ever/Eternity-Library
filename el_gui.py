@@ -11,11 +11,11 @@ from database import DatabaseManager
 class MyWindow(QMainWindow):
     def __init__(self):                         # 初始化窗口
         super().__init__()                      # 调用父类的初始化方法
-        self.listWidget = None
-        self.scanButton = None
-        self.pushButton = None
-        self.statusbar = None
         self.menubar = None
+        self.statusbar = None
+        self.pushButton = None
+        self.scanButton = None
+        self.listWidget = None
         self.setup_ui()                         # 设置窗口的属性
         self.get_book_info()
 
@@ -41,6 +41,7 @@ class MyWindow(QMainWindow):
         self.statusbar = QtWidgets.QStatusBar(self)                     # 创建一个状态栏，分配实际的QtWidgets.QStatusBar对象
         self.statusbar.setObjectName("statusbar")                       # 设置状态栏的对象名称
         self.setStatusBar(self.statusbar)                               # 设置窗口的状态栏
+        self.statusbar.showMessage("欢迎使用三木书斋")
 
         # 添加关闭按钮
         self.pushButton = QtWidgets.QPushButton(self)                   # 创建一个按钮，分配实际的QtWidgets.QPushButton对象
@@ -58,30 +59,59 @@ class MyWindow(QMainWindow):
 
         # 添加列表框
         self.listWidget = QtWidgets.QListWidget(self)
-        self.listWidget.setGeometry(QtCore.QRect(10, 60, 300, 900))
+        self.listWidget.setGeometry(QtCore.QRect(10, 60, 1900, 900))
         self.listWidget.setObjectName("listWidget")
         self.listWidget.setViewMode(QtWidgets.QListView.ListMode)
         self.listWidget.setWordWrap(True)
         self.listWidget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)     # 设置列表框的选中模式
         self.listWidget.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectItems)       # 设置列表框的选中行为
-        self.listWidget.itemClicked.connect(self.get_book_info)
+        self.listWidget.itemClicked.connect(self.get_book_info)     # TODO：列表框无法正确显示，待修复
+
+        self.listWidget.setVisible(True)
+        self.listWidget.raise_()            # 确保listWidget显示在最前面
+        print(f"listWidget 几何位置: {self.listWidget.geometry()}")  # 调试信息
+        print(f"listWidget 是否可见: {self.listWidget.isVisible()}")  # 调试信息
+
+        # 确认 listWidget 的父窗口是否正确
+        print(f"listWidget 的父窗口: {self.listWidget.parent()}")  # 调试信息
 
     def _translate(self, context, text):
-        """翻译标题栏文本"""
+        """
+        翻译标题栏文本
+        :param context:
+        :param text:
+        """
         return QCoreApplication.translate(context, text)
 
     def scan_books(self):
         """扫描文件按钮点击事件，调用ScanBookFiles类的select_directory方法"""
         scan_dialog = ScanBookFiles()                      # 创建ScanBookFiles类的实例
-        selected_files = scan_dialog.select_directory()                     # 调用select_directory方法
+        selected_files = scan_dialog.select_directory()    # 调用select_directory方法
 
-    def get_book_info(self):
-        """获取书籍信息"""
+    def get_book_info(self, item=None):
+        """获取书籍信息并显示在列表框中"""
         book_db = DatabaseManager()
-        book_db.get_book(book_name='test_book')
+        books = book_db.get_all_books()
+        if not books:
+            print("没有找到书籍信息")
+            return
+
         self.listWidget.clear()
-        for book in book_db.get_book(book_name='test_book'):
-            self.listWidget.addItem(book)
+        for book in books:
+            print(f"processing books:{book}")
+            if isinstance(book, tuple):
+                book_str = ', '.join([str(value) for value in book])
+                self.listWidget.addItem(book_str)
+                print(f"添加到 listWidget 的书籍信息: {book_str}")  # 调试信息
+            else:
+                print(f"书籍信息格式错误: {book}")
+
+        print(f"listWidget 项数: {self.listWidget.count()}")  # 调试信息
+
+        # 检查 listWidget 的内容
+        for i in range(self.listWidget.count()):
+            item = self.listWidget.item(i)
+            print(f"listWidget 项 {i}: {item.text()}")
 
 
 if __name__ == '__main__':
