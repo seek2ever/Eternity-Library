@@ -20,38 +20,48 @@ class MyWindow(QMainWindow):
         self.get_book_info()
 
     def setup_ui(self):
+        # 设置窗口属性
         self.setObjectName("MainWindow")
         self.setWindowTitle(self._translate("Eternity Library", "三木书斋"))
         self.setGeometry(200, 200, 1920, 1080)
         self.setWindowOpacity(1)
 
+        # 设置窗口图标
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap("images/book_icon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.setWindowIcon(icon)
 
+        # 添加菜单栏
         self.menubar = QtWidgets.QMenuBar(self)
         self.menubar.setObjectName("menubar")
         self.setMenuBar(self.menubar)
 
+        # 添加状态栏
         self.statusbar = QtWidgets.QStatusBar(self)
         self.statusbar.setObjectName("statusbar")
         self.setStatusBar(self.statusbar)
         self.statusbar.showMessage("欢迎使用三木书斋")
 
+        # 创建布局
         layout = QVBoxLayout()
 
+        # 添加“关闭”按钮
         self.pushButton = QtWidgets.QPushButton(self)
         self.pushButton.setObjectName("pushButton")
         self.pushButton.setText(self._translate("Close", "关闭"))
         self.pushButton.clicked.connect(self.close)
         self.pushButton.setFixedSize(60, 30)
         layout.addWidget(self.pushButton)
+
+        # 添加“扫描文件”按钮
         self.scanButton = QtWidgets.QPushButton(self)
         self.scanButton.setObjectName("scanButton")
         self.scanButton.setText(self._translate("Scan Files", "扫描文件"))
         self.scanButton.clicked.connect(self.scan_books)
         self.scanButton.setFixedSize(80, 30)
         layout.addWidget(self.scanButton)
+
+        # 添加“书籍列表”显示框
         self.listWidget = QtWidgets.QListWidget(self)
         self.listWidget.setObjectName("listWidget")
         self.listWidget.setViewMode(QtWidgets.QListView.ListMode)
@@ -60,6 +70,8 @@ class MyWindow(QMainWindow):
         self.listWidget.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectItems)
         self.listWidget.itemClicked.connect(self.get_book_info)
         layout.addWidget(self.listWidget)
+
+        # 将布局添加到窗口
         container = QtWidgets.QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
@@ -68,6 +80,10 @@ class MyWindow(QMainWindow):
         return QCoreApplication.translate(context, text)
 
     def scan_books(self):
+        """
+        调用books模块中的ScanBookFiles类扫描书籍
+        :return:
+        """
         scan_dialog = ScanBookFiles()
         selected_files = scan_dialog.select_directory()
 
