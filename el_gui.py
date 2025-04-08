@@ -51,6 +51,7 @@ class MyWindow(QMainWindow):
         self.pushButton.setText(self._translate("Close", "关闭"))
         self.pushButton.clicked.connect(self.close)
         self.pushButton.setFixedSize(60, 30)
+        # 将按钮添加到布局
         layout.addWidget(self.pushButton)
 
         # 添加“扫描文件”按钮
@@ -59,6 +60,7 @@ class MyWindow(QMainWindow):
         self.scanButton.setText(self._translate("Scan Files", "扫描文件"))
         self.scanButton.clicked.connect(self.scan_books)
         self.scanButton.setFixedSize(80, 30)
+        # 将按钮添加到布局
         layout.addWidget(self.scanButton)
 
         # 添加“书籍列表”显示框
@@ -69,6 +71,7 @@ class MyWindow(QMainWindow):
         self.listWidget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.listWidget.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectItems)
         self.listWidget.itemClicked.connect(self.get_book_info)
+        # 将布局添加到窗口
         layout.addWidget(self.listWidget)
 
         # 将布局添加到窗口
