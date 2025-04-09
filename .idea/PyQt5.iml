@@ -9,6 +9,8 @@
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="Python Project" />
     <orderEntry type="module" module-name="PyQt5-code" />
+    <orderEntry type="module" module-name="PyQt从入门到精通-Code" />
+    <orderEntry type="module" module-name="PyQt5-Mingrisoft" />
   </component>
   <component name="PackageRequirementsSettings">
     <option name="requirementsPath" value="" />

@@ -1,7 +1,7 @@
 import os
 import sqlite3
 import random
-
+from typing import Union
 
 class DatabaseManager:
     def __init__(self, db_name='books_information.db'):
@@ -38,7 +38,7 @@ class DatabaseManager:
     def add_column(self, table_name, column_name, column_type='TEXT'):
         """
         添加新的列
-        :param table_name：表名
+        :param table_name: 表名
         :param column_name: 列名
         :param column_type: 列类型
         """
@@ -160,12 +160,13 @@ class DatabaseManager:
         else:
             return checked
 
-    def get_book(self, book_name, columns=None):
+    def get_book(self, book_name, columns=None) -> Union[list, str]:
         """
         获取指定书籍的部分信息（默认返回所有信息）
         :param book_name：书籍名称
         :param columns：指定要获取的列名列表，默认为None，表示获取书籍的所有信息
-        :return: 书籍信息列表
+        :return: 书籍信息列表，元素只有一个元组，元组中的元素为书籍的各项信息，
+        如 [(4071916953, '学术规范导论.pdf', 'F:/Books', '2024年04月18日 23:49:50', None, ..., None)]
         """
         try:
             sql_check = f"SELECT * FROM books_information WHERE book_name=?"
@@ -173,7 +174,7 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             return f'没有查询到名为"{book_name}"的书籍，请重试。'
         else:
-            # 如果指定了要获取的列名，则根据指定的列名查询书籍信息
+            # 如果指定了要获取的列名(即columns不为空)，则根据指定的列名查询书籍信息
             if columns is not None:
                 sql = f"SELECT {columns} FROM books_information WHERE book_name=?"
                 self.cursor.execute(sql, (book_name,))
@@ -204,6 +205,6 @@ class DatabaseManager:
 
 if __name__ == '__main__':
     db = DatabaseManager()
-    s = db.get_book(book_name='学术规范导论.pdf')     # 查询的结果为list形式，书籍信心在list中以元组的形式存在（即[(book,path,...)]
-    print(s)
-    db.close()                  # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露
+    sample = db.get_book(book_name='学术规范导论.pdf')
+    print(sample)
+    db.close()          # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露
