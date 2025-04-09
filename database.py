@@ -1,7 +1,7 @@
 import os
 import sqlite3
 import random
-
+from typing import Union
 
 class DatabaseManager:
     def __init__(self, db_name='books_information.db'):
@@ -160,13 +160,13 @@ class DatabaseManager:
         else:
             return checked
 
-    def get_book(self, book_name, columns=None):
+    def get_book(self, book_name, columns=None) -> Union[list, str]:
         """
         获取指定书籍的部分信息（默认返回所有信息）
         :param book_name：书籍名称
         :param columns：指定要获取的列名列表，默认为None，表示获取书籍的所有信息
         :return: 书籍信息列表，元素只有一个元组，元组中的元素为书籍的各项信息，
-        如[(4071916953, '学术规范导论.pdf', 'F:/Books', '2024年04月18日 23:49:50', None, ..., None)]
+        如 [(4071916953, '学术规范导论.pdf', 'F:/Books', '2024年04月18日 23:49:50', None, ..., None)]
         """
         try:
             sql_check = f"SELECT * FROM books_information WHERE book_name=?"
@@ -174,7 +174,7 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             return f'没有查询到名为"{book_name}"的书籍，请重试。'
         else:
-            # 如果指定了要获取的列名，则根据指定的列名查询书籍信息
+            # 如果指定了要获取的列名(即columns不为空)，则根据指定的列名查询书籍信息
             if columns is not None:
                 sql = f"SELECT {columns} FROM books_information WHERE book_name=?"
                 self.cursor.execute(sql, (book_name,))
