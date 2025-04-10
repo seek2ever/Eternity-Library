@@ -3,6 +3,7 @@ import sqlite3
 import random
 from typing import Union
 
+
 class DatabaseManager:
     def __init__(self, db_name='books_information.db'):
         self.db_name = db_name                              # 数据库名称
@@ -188,10 +189,10 @@ class DatabaseManager:
                 books = self.cursor.fetchall()
                 return books
 
-    def get_all_books(self):
+    def get_all_books(self) -> list:
         """
-        获取所有书籍的信息
-        :return: 所有书籍的信息列表
+        :return: 所有书籍的信息列表，每个元素都是一个元组
+        例如：(7965672015, '中国科学技术史 天文学卷.pdf', 'F:/Books', '2024年04月18日 23:49:50', None, ..., None)
         """
         sql = "SELECT * FROM books_information"
         self.cursor.execute(sql)
@@ -205,6 +206,5 @@ class DatabaseManager:
 
 if __name__ == '__main__':
     db = DatabaseManager()
-    sample = db.get_book(book_name='学术规范导论.pdf')
-    print(sample)
-    db.close()          # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露
+    sample = db.get_all_books()
+    db.close()                      # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露
