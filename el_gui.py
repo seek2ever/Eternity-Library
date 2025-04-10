@@ -105,7 +105,7 @@ class MyWindow(QMainWindow):
         books = book_db.get_all_books()
         # 如果没有找到相关书籍信息，则弹出提示框
         if not books:
-            QMessageBox.information(self, "提示", "未找到相关书籍信息，请重试。")
+            QMessageBox.information(self, "提示", "书籍索引信息为空。")
         # 如果找到相关书籍信息，则展示在列表控件中
         else:
             self.listWidget.clear()
