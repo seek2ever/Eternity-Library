@@ -2,7 +2,7 @@ import sys
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import Qt, QCoreApplication
-from PyQt5.QtWidgets import QMainWindow, QApplication, QVBoxLayout
+from PyQt5.QtWidgets import QMainWindow, QApplication, QVBoxLayout, QMessageBox
 
 from books import ScanBookFiles
 from database import DatabaseManager
@@ -11,13 +11,13 @@ from database import DatabaseManager
 class MyWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.showButton = None
         self.menubar = None
         self.statusbar = None
         self.pushButton = None
         self.scanButton = None
         self.listWidget = None
         self.setup_ui()
-        self.get_book_info()
 
     def setup_ui(self):
         # 设置窗口属性
@@ -53,6 +53,12 @@ class MyWindow(QMainWindow):
         self.pushButton.setFixedSize(60, 30)
         # 将按钮添加到布局
         layout.addWidget(self.pushButton)
+
+        self.showButton = QtWidgets.QPushButton(self)
+        self.showButton.setText(self._translate("Show books information.", "显示书籍信息"))
+        self.showButton.setFixedSize(120, 30)
+        self.showButton.clicked.connect(self.get_book_info)
+        layout.addWidget(self.showButton)
 
         # 添加“扫描文件”按钮
         self.scanButton = QtWidgets.QPushButton(self)
@@ -91,27 +97,27 @@ class MyWindow(QMainWindow):
         selected_files = scan_dialog.select_directory()
 
     def get_book_info(self, item=None):
+        """
+        获取书籍信息并展示在列表控件（QListWidget）
+        :return:
+        """
         book_db = DatabaseManager()
         books = book_db.get_all_books()
+        # 如果没有找到相关书籍信息，则弹出提示框
         if not books:
-            print("没有找到书籍信息")
-            return
-
-        self.listWidget.clear()
-        for book in books:
-            print(f"processing books:{book}")
-            if isinstance(book, tuple):
-                book_str = ', '.join([str(value) for value in book])
-                self.listWidget.addItem(book_str)
-                print(f"添加到 listWidget 的书籍信息: {book_str}")
-            else:
-                print(f"书籍信息格式错误: {book}")
-
-        print(f"listWidget 项数: {self.listWidget.count()}")
+            QMessageBox.information(self, "提示", "未找到相关书籍信息，请重试。")
+        # 如果找到相关书籍信息，则展示在列表控件中
+        else:
+            self.listWidget.clear()
+            for book in books:
+                if isinstance(book, tuple):
+                    book_str = ', '.join([str(value) for value in book])
+                    self.listWidget.addItem(book_str)
+                else:
+                    QMessageBox.warning(self, "警告", f"书籍{book}的信息错误！")
 
         for i in range(self.listWidget.count()):
             item = self.listWidget.item(i)
-            print(f"listWidget 项 {i}: {item.text()}")
 
 
 if __name__ == '__main__':
