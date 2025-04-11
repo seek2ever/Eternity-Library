@@ -52,19 +52,22 @@ class ScanBookFiles(QWidget):
         """
         扫描本地硬盘中的电子书，directory为待扫描文件所在路径；output_file为扫描记录的路径
         """
-        current_date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
+        date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
+        supported_extensions = ['.pdf', '.doc', '.docx', '.epub', '.txt']   # 支持的文件格式
         scan_info = []
-        books_found = False  # 添加标志位，表示此时尚未有任何电子书文件被找到
+        books_found = False    # 添加标志位，表示此时尚未有任何电子书文件被找到
         try:
             # 包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
             for root, dirs, files in os.walk(directory):
                 for file in files:
-                    if file.endswith(('.pdf', '.doc', '.docx', '.epub', '.txt')):
-                        books_found = True  # 有电子书文件被找到时，标志位置为True
+                    if file.endswith(tuple(supported_extensions)):
+                        books_found = True                                  # 有电子书文件被找到时，标志位置为True
+                        file, end = os.path.splitext(file)                  # 分离文件与其扩展名，得到一个元组，例如('book','.pdf')
                         book_info = {
-                            "book_name": file,
-                            "book_path": root,
-                            "add_time": current_date
+                            'book_name': file,
+                            'book_path': root,
+                            'book_type': end,
+                            'add_time': date
                         }
                         scan_info.append(book_info)
 
