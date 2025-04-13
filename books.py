@@ -71,7 +71,7 @@ class ScanBookFiles(QWidget):
                         }
                         scan_info.append(book_info)
 
-            # 如果没有找到任何电子书文件，则显示提示信息
+            # 如果没有找到任何电子书文件，则显示提示信息     TODO 待分离：界面显示代码与数据处理代码耦合
             if not books_found:
                 choose = QMessageBox.question(None, "提示", f"未扫描到书籍文件，是否手动检查以下路径：\n{directory}？",
                                               QMessageBox.Yes | QMessageBox.No)
@@ -107,21 +107,6 @@ class ScanBookFiles(QWidget):
         for i in scan_info:
             db.add_book(**i)  # 将扫描结果写入数据库
         db.close()
-
-
-class Tips(QWidget):
-    """提示框类，用于显示提示信息"""
-
-    def __init__(self):
-        super().__init__()
-
-    def show_tips(self, tip):
-        """显示提示信息的对话框"""
-        QMessageBox.information(None, "提示", tip, QMessageBox.Ok)
-
-    def show_warning(self, warning):
-        """显示警告信息的对话框"""
-        QMessageBox.warning(None, "警告", warning, QMessageBox.Ok)
 
 
 class Books:
