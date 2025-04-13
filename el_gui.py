@@ -18,6 +18,9 @@ class MyWindow(QMainWindow):
         self.scanButton = None
         self.listWidget = None
         self.setup_ui()
+        self.db = DatabaseManager()
+        self.db.duplicate_book.connect(self.handle_duplicate_book)
+        self.db.add_book_result.connect(self.show_add_result)
 
     def setup_ui(self):
         # 设置窗口属性
@@ -118,6 +121,57 @@ class MyWindow(QMainWindow):
 
         for i in range(self.listWidget.count()):
             item = self.listWidget.item(i)
+
+    def handle_duplicate_book(self, book_name):
+        """
+        处理重复的书籍信息
+        :param book_name:
+        :return:
+        """
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Question)
+        msg.setText(f"检测到重复书籍：{book_name}")
+        msg.setStandbutton(
+            QMessageBox.Yes |
+            QMessageBox.No |
+            QMessageBox.Ignore
+        )
+        msg.setButtonText(QMessageBox.Yes, "覆盖")
+        msg.setBUttonText(QMessageBox.No, "重命名")
+        msg.setBUttonText(QMessageBox.Ignore, "跳过")
+
+        choice = msg.exec()
+        if choice == QMessageBox.Yes:
+            self.db.handle_duplicate_book("overwrite", book_name)
+        elif choice == QMessageBox.No:
+            self.db.handle_duplicate_book("rename", book_name)
+        elif choice == QMessageBox.Ignore:
+            self.db.handle_duplicate_book("skip", book_name)
+
+    def show_add_result(self, success, message):
+        """显示添加结果"""
+        QMessageBox.information(self, "操作结果", message)
+
+
+class Tips:
+    def __init__(self, parent=None):
+        self.parent = parent
+
+    def question_msg(self):
+        """显示需要用户抉择的疑问性信息"""
+        # TODO 显示询问信息
+    def information_msg(self, msg):
+        """显示一般性的通知信息"""
+        # TODO 显示一般通知信息
+        QMessageBox.information(None, "提示", msg)
+
+    def warning_msg(self):
+        """显示警告信息"""
+        # TODO 显示警告信息
+
+    def critical_msg(self):
+        """显示严重错误信息"""
+    # TODO 显示严重错误信息
 
 
 if __name__ == '__main__':
