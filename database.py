@@ -1,14 +1,21 @@
-import os
 import sqlite3
 import random
+import sqlite3
 from typing import Union
+from PyQt5.QtCore import QObject, pyqtSignal
 
 
-class DatabaseManager:
+class DatabaseManager(QObject):
+    # 信号必须在类层级定义，不能在__init__中定义
+    duplicate_book = pyqtSignal(str)  # 发送重复书籍名称
+    add_book_result = pyqtSignal(bool, str)  # 返回处理结果（成功状态，消息）
+
     def __init__(self, db_name='books_information.db'):
-        self.db_name = db_name                              # 数据库名称
-        self.connection = sqlite3.connect(self.db_name)     # 连接到数据库
-        self.cursor = self.connection.cursor()              # 创建一个Cursor（游标）对象，用于执行SQL语句
+        super().__init__()
+        self.db_name = db_name  # 数据库名称
+        self.connection = sqlite3.connect(self.db_name)  # 连接到数据库
+        self.cursor = self.connection.cursor()  # 创建一个Cursor（游标）对象，用于执行SQL语句
+        self.pending_book = None  # 临时存储待处理的书籍数据
 
     def create_table(self):
         self.cursor.execute("""
@@ -54,36 +61,62 @@ class DatabaseManager:
         :return: 生成的唯一书籍名称
         """
         suffix = 1
-        base_name, ext = os.path.splitext(old_name)  # 分离文件名和扩展名（假设书籍名称包含扩展名）
-
         while True:
-            new_name = f"{base_name}_{suffix}{ext}" if suffix > 1 else old_name
             sql = "SELECT COUNT(*) FROM books_information WHERE book_name = ?"
+            new_name = f"{old_name}({suffix})" if suffix > 1 else old_name  # TODO 待修复：重命名逻辑存在问题，无法自动添加后缀
             self.cursor.execute(sql, (new_name,))
-            count = self.cursor.fetchone()[0]
 
+            count = self.cursor.fetchone()[0]
             if count == 0:
                 return new_name
 
             suffix += 1
 
-    def add_book(self, **kwargs):   # 以关键字参数的形式接收书籍信息
+    def add_book(self, **kwargs):  # 以关键字参数的形式接收书籍信息
         """
         添加书籍信息，如果书籍名称与已存在书籍重复，自动跳过该书籍的录入步骤。
         :param kwargs: 书籍信息
         """
-        book_name = kwargs['book_name']
+        self.pending_book = kwargs  # 将待处理的书籍数据存储在类的属性中
+        old_name = kwargs['book_name']
         sql_pass = 'SELECT * FROM books_information WHERE book_name=?'
-        self.cursor.execute(sql_pass, (book_name,))
+        self.cursor.execute(sql_pass, (old_name,))
+        # 如果数据库中已经存在同名书籍
         if self.cursor.fetchall():
-            print(f"书籍： {book_name} 已存在于数据库中。")
+            self.duplicate_book.emit(old_name)  # 发送信号，通知主窗口书籍已存在，请选择是否继续添加
         else:
-            columns = ', '.join(kwargs.keys())                  # 以逗号分隔的列名
-            placeholders = ', '.join(['?'] * len(kwargs))       # 以逗号分隔的占位符
-            sql = f"INSERT INTO books_information ({columns}) VALUES ({placeholders})"
-            self.cursor.execute(sql, tuple(kwargs.values()))    # 执行SQL语句
-            self.set_book_id(book_name)
-            self.connection.commit()                            # 提交事务
+            self._insert_book(kwargs)  # 执行插入操作
+
+    def handle_duplicate_book(self, choice: str, original_name: str):
+        """
+        处理用户选择的重复书籍操作
+        :param choice: 'skip'/'overwrite'/'rename'
+        :param original_name: 原始书名
+        """
+        # 发送信号，通知主窗口已跳过重复书籍
+        if choice == 'skip':
+            self.add_book_result.emit(False, "已跳过重复书籍")
+
+        # 执行覆盖操作
+        elif choice == 'overwrite':
+            self.delete_book(original_name)
+            self._insert_book(self.pending_book)
+
+        # 执行重命名操作
+        elif choice == 'rename':
+            new_name = self._gen_new_name(original_name)
+            self.pending_book['book_name'] = new_name
+            self._insert_book(self.pending_book)
+
+    def _insert_book(self, book_data):
+        """实际插入数据的内部方法"""
+        columns = ', '.join(book_data.keys())
+        placeholders = ', '.join(['?'] * len(book_data))
+        sql = f"INSERT INTO books_information ({columns}) VALUES ({placeholders})"
+        self.cursor.execute(sql, tuple(book_data.values()))
+        self.set_book_id(book_data['book_name'])
+        self.connection.commit()
+        self.add_book_result.emit(True, f"书籍添加成功！")
 
     def set_book_id(self, book_name):
         """
@@ -126,13 +159,13 @@ class DatabaseManager:
         self.cursor.execute(sql, (book_name,))
         self.connection.commit()
 
-    # def delete_all_books(self):
-    #     """
-    #     删除所有书籍信息
-    #     """
-    #     sql = "DELETE FROM books_information"
-    #     self.cursor.execute(sql)
-    #     self.connection.commit()
+    def delete_all_books(self):
+        """
+        删除所有书籍信息
+        """
+        sql = "DELETE FROM books_information"
+        self.cursor.execute(sql)
+        self.connection.commit()
 
     def update_book(self, book_name, **kwargs):
         """
@@ -146,20 +179,20 @@ class DatabaseManager:
         sql = f"UPDATE books_information SET {columns} WHERE book_name=?"
         self.cursor.execute(sql, values)
         self.connection.commit()
+        # TODO 待更新：用户修改本地文件名称时，自动更新数据库中的书籍名称
 
-    def check_book_info(self, book_name):
+    def check_book_info(self, book_name) -> str:
         """
         检查书籍是否存在于数据库中
         :param book_name: 书籍名称
-        :return: 如果书籍存在，返回True；否则，返回False
+        :return: 如果书籍存在，返回True；否则，返回提示
         """
         sql = "SELECT * FROM books_information WHERE book_name=?"
-        checked = "未找到相应书籍"
         self.cursor.execute(sql, (book_name,))
         if not None:
             return self.cursor.fetchone()
         else:
-            return checked
+            return f"未找到名为{book_name}的书籍"
 
     def get_book(self, book_name, columns=None) -> Union[list, str]:
         """
@@ -167,7 +200,7 @@ class DatabaseManager:
         :param book_name：书籍名称
         :param columns：指定要获取的列名列表，默认为None，表示获取书籍的所有信息
         :return: 书籍信息列表，元素只有一个元组，元组中的元素为书籍的各项信息，
-        如 [(4071916953, '学术规范导论.pdf', 'F:/Books', '2024年04月18日 23:49:50', None, ..., None)]
+        如 [(4071916953, '学术规范导论', 'F:/Books', '2024年04月18日 23:49:50', None, ..., None)]
         """
         try:
             sql_check = f"SELECT * FROM books_information WHERE book_name=?"
@@ -192,7 +225,7 @@ class DatabaseManager:
     def get_all_books(self) -> list:
         """
         :return: 所有书籍的信息列表，每个元素都是一个元组
-        例如：(7965672015, '中国科学技术史 天文学卷.pdf', 'F:/Books', '2024年04月18日 23:49:50', None, ..., None)
+        例如：(7965672015, '中国科学技术史 天文学卷', 'F:/Books', '2024年04月18日 23:49:50', None, ..., None)
         """
         sql = "SELECT * FROM books_information"
         self.cursor.execute(sql)
@@ -206,5 +239,5 @@ class DatabaseManager:
 
 if __name__ == '__main__':
     db = DatabaseManager()
-    sample = db.get_all_books()
-    db.close()                      # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露
+    db._gen_new_name('B777_SYSTEM')
+    db.close()  # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露
