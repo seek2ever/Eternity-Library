@@ -84,9 +84,9 @@ class MyWindow(QMainWindow):
         layout.addWidget(self.listWidget)
 
         # 将布局添加到窗口
-        container = QtWidgets.QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
+        container = QtWidgets.QWidget()         # | 1.创建容器 | container = QWidget() | 准备新卡纸 |
+        container.setLayout(layout)             # | 2.设置布局 | container.setLayout(layout) | 在卡纸上画格子 |
+        self.setCentralWidget(container)        # | 3.设为中央 | setCentralWidget(container) | 把卡纸装进相框 |
 
     def _translate(self, context, text):
         return QCoreApplication.translate(context, text)
