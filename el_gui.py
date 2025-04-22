@@ -11,6 +11,7 @@ from database import DatabaseManager
 class MyWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.clearButton = None
         self.showButton = None
         self.menubar = None
         self.statusbar = None
@@ -59,11 +60,19 @@ class MyWindow(QMainWindow):
         # 将按钮添加到布局
         Hlayout.addWidget(self.pushButton)
 
+        # 添加“显示书籍信息”按钮
         self.showButton = QtWidgets.QPushButton(self)
         self.showButton.setText(self._translate("Show books information.", "显示书籍信息"))
         self.showButton.setFixedSize(120, 30)
         self.showButton.clicked.connect(self.get_book_info)
         Hlayout.addWidget(self.showButton)
+
+        # 添加“取消显示”按钮
+        self.clearButton = QtWidgets.QPushButton(self)
+        self.clearButton.setText(self._translate("Not show", "取消显示"))
+        self.clearButton.setFixedSize(120, 30)
+        self.clearButton.clicked.connect(self.close_info)
+        Hlayout.addWidget(self.clearButton)
 
         # 添加“扫描文件”按钮
         self.scanButton = QtWidgets.QPushButton(self)
@@ -87,9 +96,9 @@ class MyWindow(QMainWindow):
         Vlayout.addWidget(self.listWidget)
 
         # 将布局添加到窗口
-        container = QtWidgets.QWidget()         # | 1.创建容器 | container = QWidget() | 准备新卡纸 |
-        container.setLayout(Vlayout)            # | 2.设置布局 | container.setLayout(layout) | 在卡纸上画格子 |
-        self.setCentralWidget(container)        # | 3.设为中央 | setCentralWidget(container) | 把卡纸装进相框 |
+        main_layout = QtWidgets.QWidget()         # container作为局部变量，仅在当前方法中使用，因此不需要添加self变成实例属性
+        main_layout.setLayout(Vlayout)            # | 2.设置布局 | container.setLayout(layout) | 在卡纸上画格子 |
+        self.setCentralWidget(main_layout)        # | 3.设为中央 | setCentralWidget(container) | 把卡纸装进相框 |
 
     def _translate(self, context, text):
         return QCoreApplication.translate(context, text)
@@ -150,6 +159,10 @@ class MyWindow(QMainWindow):
             self.db.handle_duplicate_book("rename", book_name)
         elif choice == QMessageBox.Ignore:
             self.db.handle_duplicate_book("skip", book_name)
+
+    def close_info(self) -> None:
+        """清除主界面的书籍信息"""
+        self.listWidget.clear()
 
     def show_add_result(self, success, message):
         """显示添加结果"""
