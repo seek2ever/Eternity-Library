@@ -15,9 +15,9 @@ class MyWindow(QMainWindow):
         self.showButton = None
         self.menubar = None
         self.statusbar = None
-        self.pushButton = None
+        self.closeButton = None
         self.scanButton = None
-        self.listWidget = None
+        self.bookWidget = None
         self.setup_ui()
         self.db = DatabaseManager()
         self.db.duplicate_book.connect(self.handle_duplicate_book)
@@ -52,13 +52,13 @@ class MyWindow(QMainWindow):
         Vlayout = QVBoxLayout()
 
         # 添加“关闭”按钮
-        self.pushButton = QtWidgets.QPushButton(self)
-        self.pushButton.setObjectName("pushButton")
-        self.pushButton.setText(self._translate("Close", "关闭"))
-        self.pushButton.clicked.connect(self.close)
-        self.pushButton.setFixedSize(60, 30)
+        self.closeButton = QtWidgets.QPushButton(self)
+        self.closeButton.setObjectName("pushButton")
+        self.closeButton.setText(self._translate("Close", "关闭"))
+        self.closeButton.clicked.connect(self.close)
+        self.closeButton.setFixedSize(60, 30)
         # 将按钮添加到布局
-        Hlayout.addWidget(self.pushButton)
+        Hlayout.addWidget(self.closeButton)
 
         # 添加“显示书籍信息”按钮
         self.showButton = QtWidgets.QPushButton(self)
@@ -84,16 +84,16 @@ class MyWindow(QMainWindow):
         Hlayout.addWidget(self.scanButton)
 
         # 添加“书籍列表”显示框
-        self.listWidget = QtWidgets.QListWidget(self)
-        self.listWidget.setObjectName("listWidget")
-        self.listWidget.setViewMode(QtWidgets.QListView.ListMode)
-        self.listWidget.setWordWrap(True)
-        self.listWidget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
-        self.listWidget.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectItems)
-        self.listWidget.itemClicked.connect(self.get_book_info)
+        self.bookWidget = QtWidgets.QListWidget(self)
+        self.bookWidget.setObjectName("listWidget")
+        self.bookWidget.setViewMode(QtWidgets.QListView.ListMode)
+        self.bookWidget.setWordWrap(True)
+        self.bookWidget.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.bookWidget.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectItems)
+        self.bookWidget.itemClicked.connect(self.get_book_info)
         # 将布局添加到窗口
         Vlayout.addLayout(Hlayout)              # 如果在“书籍列表”添加布局后再将列表控件添加到布局中，则按钮会显示在显示框下方
-        Vlayout.addWidget(self.listWidget)
+        Vlayout.addWidget(self.bookWidget)
 
         # 将布局添加到窗口
         main_layout = QtWidgets.QWidget()         # container作为局部变量，仅在当前方法中使用，因此不需要添加self变成实例属性
@@ -123,16 +123,16 @@ class MyWindow(QMainWindow):
             QMessageBox.information(self, "提示", "书籍索引信息为空。")
         # 如果找到相关书籍信息，则展示在列表控件中
         else:
-            self.listWidget.clear()
+            self.bookWidget.clear()
             for book in books:
                 if isinstance(book, tuple):
                     book_str = ', '.join([str(value) for value in book])
-                    self.listWidget.addItem(book_str)
+                    self.bookWidget.addItem(book_str)
                 else:
                     QMessageBox.warning(self, "警告", f"书籍{book}的信息错误！")
 
-        for i in range(self.listWidget.count()):
-            item = self.listWidget.item(i)
+        for i in range(self.bookWidget.count()):
+            item = self.bookWidget.item(i)
 
     def handle_duplicate_book(self, book_name):
         """
@@ -162,7 +162,7 @@ class MyWindow(QMainWindow):
 
     def close_info(self) -> None:
         """清除主界面的书籍信息"""
-        self.listWidget.clear()
+        self.bookWidget.clear()
 
     def show_add_result(self, success, message):
         """显示添加结果"""
