@@ -97,8 +97,8 @@ class MyWindow(QMainWindow):
 
         # 将布局添加到窗口
         main_layout = QtWidgets.QWidget()         # container作为局部变量，仅在当前方法中使用，因此不需要添加self变成实例属性
-        main_layout.setLayout(Vlayout)            # | 2.设置布局 | container.setLayout(layout) | 在卡纸上画格子 |
-        self.setCentralWidget(main_layout)        # | 3.设为中央 | setCentralWidget(container) | 把卡纸装进相框 |
+        main_layout.setLayout(Vlayout)
+        self.setCentralWidget(main_layout)
 
     def _translate(self, context, text):
         return QCoreApplication.translate(context, text)
