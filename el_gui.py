@@ -56,21 +56,21 @@ class MyWindow(QMainWindow):
         self.closeButton.setObjectName("pushButton")
         self.closeButton.setText(self._translate("Close", "关闭"))
         self.closeButton.clicked.connect(self.close)
-        self.closeButton.setFixedSize(60, 30)
+        self.closeButton.setFixedSize(80, 50)
         # 将按钮添加到布局
         Hlayout.addWidget(self.closeButton)
 
         # 添加“显示书籍信息”按钮
         self.showButton = QtWidgets.QPushButton(self)
         self.showButton.setText(self._translate("Show books information.", "显示书籍信息"))
-        self.showButton.setFixedSize(120, 30)
+        self.showButton.setFixedSize(200, 50)
         self.showButton.clicked.connect(self.get_book_info)
         Hlayout.addWidget(self.showButton)
 
         # 添加“取消显示”按钮
         self.clearButton = QtWidgets.QPushButton(self)
         self.clearButton.setText(self._translate("Not show", "取消显示"))
-        self.clearButton.setFixedSize(120, 30)
+        self.clearButton.setFixedSize(140, 50)
         self.clearButton.clicked.connect(self.close_info)
         Hlayout.addWidget(self.clearButton)
 
@@ -79,7 +79,7 @@ class MyWindow(QMainWindow):
         self.scanButton.setObjectName("scanButton")
         self.scanButton.setText(self._translate("Scan Files", "扫描文件"))
         self.scanButton.clicked.connect(self.scan_books)
-        self.scanButton.setFixedSize(80, 30)
+        self.scanButton.setFixedSize(140, 50)
         # 将按钮添加到布局
         Hlayout.addWidget(self.scanButton)
 
@@ -99,6 +99,14 @@ class MyWindow(QMainWindow):
         main_layout = QtWidgets.QWidget()         # container作为局部变量，仅在当前方法中使用，因此不需要添加self变成实例属性
         main_layout.setLayout(Vlayout)
         self.setCentralWidget(main_layout)
+
+        # 设置按钮字号
+        self.setStyleSheet("""
+        QPushButton {
+        font-size: 16pt;
+        font-family: Microsoft YaHei;
+        }
+        """)
 
     def _translate(self, context, text):
         return QCoreApplication.translate(context, text)
