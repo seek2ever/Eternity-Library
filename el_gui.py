@@ -47,9 +47,9 @@ class MyWindow(QMainWindow):
         self.statusbar.showMessage("欢迎使用三木书斋")
 
         # 按钮之间的水平布局
-        Hlayout = QHBoxLayout()
+        h_layout = QHBoxLayout()
         # 按钮和显示列表的垂直布局
-        Vlayout = QVBoxLayout()
+        v_layout = QVBoxLayout()
 
         # 添加“关闭”按钮
         self.closeButton = QtWidgets.QPushButton(self)
@@ -58,21 +58,21 @@ class MyWindow(QMainWindow):
         self.closeButton.clicked.connect(self.close)
         self.closeButton.setFixedSize(80, 50)
         # 将按钮添加到布局
-        Hlayout.addWidget(self.closeButton)
+        h_layout.addWidget(self.closeButton)
 
         # 添加“显示书籍信息”按钮
         self.showButton = QtWidgets.QPushButton(self)
         self.showButton.setText(self._translate("Show books information.", "显示书籍信息"))
         self.showButton.setFixedSize(200, 50)
         self.showButton.clicked.connect(self.get_book_info)
-        Hlayout.addWidget(self.showButton)
+        h_layout.addWidget(self.showButton)
 
         # 添加“取消显示”按钮
         self.clearButton = QtWidgets.QPushButton(self)
         self.clearButton.setText(self._translate("Not show", "取消显示"))
         self.clearButton.setFixedSize(140, 50)
         self.clearButton.clicked.connect(self.close_info)
-        Hlayout.addWidget(self.clearButton)
+        h_layout.addWidget(self.clearButton)
 
         # 添加“扫描文件”按钮
         self.scanButton = QtWidgets.QPushButton(self)
@@ -81,7 +81,7 @@ class MyWindow(QMainWindow):
         self.scanButton.clicked.connect(self.scan_books)
         self.scanButton.setFixedSize(140, 50)
         # 将按钮添加到布局
-        Hlayout.addWidget(self.scanButton)
+        h_layout.addWidget(self.scanButton)
 
         # 添加“书籍列表”显示框
         self.bookWidget = QtWidgets.QListWidget(self)
@@ -92,12 +92,12 @@ class MyWindow(QMainWindow):
         self.bookWidget.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectItems)
         self.bookWidget.itemClicked.connect(self.get_book_info)
         # 将布局添加到窗口
-        Vlayout.addLayout(Hlayout)              # 如果在“书籍列表”添加布局后再将列表控件添加到布局中，则按钮会显示在显示框下方
-        Vlayout.addWidget(self.bookWidget)
+        v_layout.addLayout(h_layout)              # 如果在“书籍列表”添加布局后再将列表控件添加到布局中，则按钮会显示在显示框下方
+        v_layout.addWidget(self.bookWidget)
 
         # 将布局添加到窗口
         main_layout = QtWidgets.QWidget()         # container作为局部变量，仅在当前方法中使用，因此不需要添加self变成实例属性
-        main_layout.setLayout(Vlayout)
+        main_layout.setLayout(v_layout)
         self.setCentralWidget(main_layout)
 
         # 设置按钮字号
