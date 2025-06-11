@@ -32,7 +32,7 @@ class ScanBookFiles(QWidget):
         self.select_button.clicked.connect(self.select_directory)  # type: ignore
 
         layout = QVBoxLayout()  # 创建垂直布局
-        layout.setAlignment(Qt.AlignCenter)  # 设置布局居中
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 设置布局居中
         layout.addWidget(self.directory_label)  # 将显示“选择扫描路径”的标签控件添加到布局中
         layout.addWidget(self.selected_directory_label)  # 将用户所选路径的标签控件添加到布局中
         layout.addWidget(self.select_button)  # 将“选择路径”的按钮控件添加到布局中
