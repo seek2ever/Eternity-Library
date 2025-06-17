@@ -8,7 +8,9 @@ from books import ScanBookFiles
 from database import DatabaseManager
 
 
-class MyWindow(QMainWindow):
+class MainWindow(QMainWindow):
+    bookWidget: QtWidgets.QListWidget       # 添加类型注释，防止Pylance报错
+
     def __init__(self):
         super().__init__()
         self.clearButton = None
@@ -181,25 +183,35 @@ class Tips:
     def __init__(self, parent=None):
         self.parent = parent
 
-    def question_msg(self):
+    def question_msg(self, qmsg) -> None:
         """显示需要用户抉择的疑问性信息"""
-        # TODO 显示询问信息
-    def information_msg(self, msg):
-        """显示一般性的通知信息"""
-        # TODO 显示一般通知信息
-        QMessageBox.information(None, "提示", msg)
+        QMessageBox.question(
+            self.parent, 
+            "提示", 
+            qmsg, 
+            QMessageBox.Yes | QMessageBox.No
+            )
 
-    def warning_msg(self):
+    def information_msg(self, imsg) -> None:
+        """显示一般性的通知信息"""
+        QMessageBox.information(
+            None, 
+            "提示", 
+            imsg, 
+            QMessageBox.Ok
+            )
+
+    def warning_msg(self, wmsg) -> None:
         """显示警告信息"""
         # TODO 显示警告信息
 
-    def critical_msg(self):
+    def critical_msg(self, cmsg) -> None:
         """显示严重错误信息"""
     # TODO 显示严重错误信息
 
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    window = MyWindow()
+    window = MainWindow()
     window.show()
     sys.exit(app.exec_())
