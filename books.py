@@ -12,6 +12,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog, QVBoxLayout, QMessageBox
 
 from database import DatabaseManager
+from el_gui import Tips
 
 
 class ScanBookFiles(QWidget):
@@ -86,17 +87,17 @@ class ScanBookFiles(QWidget):
                 self.select_directory()
             elif reply == QMessageBox.No:
                 # 用户选择结束扫描，则显示提示信息
-                QMessageBox.information(None, "提示", "扫描已结束！", QMessageBox.Ok)
+                Tips.information_msg(self, "扫描已结束！")
                 self.close()
                 # 目前已知问题：点击确定按钮后，窗口会关闭，但选择扫描路径的窗口仍然存在，需要手动关闭
 
         # 扫描遇到错误时执行以下语句
         except FileNotFoundError:
-            QMessageBox.information(None, "提示", "系统找不到指定的文件，请重试。", QMessageBox.Ok)
+            Tips.information_msg(self, "系统找不到指定的文件，请重试。")
         except NotADirectoryError:
-            QMessageBox.information(None, "提示", "系统找不到指定的路径，请重试。", QMessageBox.Ok)
+            Tips.information_msg(self, "系统找不到指定的路径，请重试。")
         except PermissionError:
-            QMessageBox.information(None, "提示", "扫描路径无访问权限，请检查路径权限。", QMessageBox.Ok)
+            Tips.information_msg(self, "扫描路径无访问权限，请检查路径权限。")
         else:
             # 扫描未引发任何异常时，将扫描结果（存储在book_info字典中）写入数据库
             self.write_into_database(scan_info)
@@ -148,7 +149,7 @@ class Books:
         default_symbol = ['⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐']  # 默认评价图标
         custom_symbol = [self.level]  # 用户自定义图标
 
-    def read_status(self):
+    def reading_status(self):
         """统计书籍的阅读状态"""
         books_status = ['尚未阅读', '正在阅读', '暂停阅读', '阅读完成']
         if eval(self.read_progress) == 0:
