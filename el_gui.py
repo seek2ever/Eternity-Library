@@ -19,7 +19,6 @@ class MainWindow(QMainWindow):
         self.statusbar = None
         self.closeButton = None
         self.scanButton = None
-        self.bookWidget = None
         self.setup_ui()
         self.db = DatabaseManager()
         self.db.duplicate_book.connect(self.handle_duplicate_book)
