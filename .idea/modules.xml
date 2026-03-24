@@ -6,6 +6,8 @@
       <module fileurl="file://$PROJECT_DIR$/../PyQt5-Mingrisoft/.idea/PyQt5-Mingrisoft.iml" filepath="$PROJECT_DIR$/../PyQt5-Mingrisoft/.idea/PyQt5-Mingrisoft.iml" />
       <module fileurl="file://$USER_HOME$/PycharmProjects/PyQt5-code/.idea/PyQt5-code.iml" filepath="$USER_HOME$/PycharmProjects/PyQt5-code/.idea/PyQt5-code.iml" />
       <module fileurl="file://$PROJECT_DIR$/../PyQt从入门到精通-Code/.idea/PyQt从入门到精通-Code.iml" filepath="$PROJECT_DIR$/../PyQt从入门到精通-Code/.idea/PyQt从入门到精通-Code.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../PythonProject/.idea/Python Project.iml" filepath="$PROJECT_DIR$/../PythonProject/.idea/Python Project.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../../video-downloader-main/.idea/video-downloader-main.iml" filepath="$PROJECT_DIR$/../../video-downloader-main/.idea/video-downloader-main.iml" />
     </modules>
   </component>
 </project>

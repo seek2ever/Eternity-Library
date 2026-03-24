@@ -2,13 +2,13 @@ import sqlite3
 import random
 import sqlite3
 from typing import Union
-from PyQt5.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 
 class DatabaseManager(QObject):
     # 信号必须在类层级定义，不能在__init__中定义
-    duplicate_book = pyqtSignal(str)  # 发送重复书籍名称
-    add_book_result = pyqtSignal(bool, str)  # 返回处理结果（成功状态，消息）
+    duplicate_book = Signal(str)  # 发送重复书籍名称
+    add_book_result = Signal(bool, str)  # 返回处理结果（成功状态，消息）
 
     def __init__(self, db_name='books_information.db'):
         super().__init__()
@@ -42,6 +42,35 @@ class DatabaseManager(QObject):
         )
         """)
         self.connection.commit()
+
+    def column_titles(self) -> list:
+        """
+        获取列的标题信息
+        """
+        return self.cursor.execute("PRAGMA table_info(books_information)").fetchall()
+
+    def column_titles_translation(self):
+        """
+        获取列的标题信息并翻译
+        """
+        # TODO: 函数内容待修改与完善
+        titles = self.column_titles()
+        translations = [
+            ('book_id', '书籍ID'),
+            ('book_name', '书籍名称'),
+            ('book_path', '书籍路径'),
+            ('add_time', '添加时间'),
+            ('author', '作者'),
+            ('nationality', '国籍'),
+            ('translator', '译者'),
+            ('publisher', '出版社'),
+            ('publication_date', '出版日期'),
+        ]
+
+    def transfer_title_type(self) -> list:
+        """获取并提取标题列信息中的“标题”，用于设置显示在控件中的表格各列标题"""
+        titles = self.column_titles()
+        return [title[1] for title in titles]
 
     def add_column(self, table_name, column_name, column_type='TEXT'):
         """
@@ -239,5 +268,8 @@ class DatabaseManager(QObject):
 
 if __name__ == '__main__':
     db = DatabaseManager()
-    db._gen_new_name('B777_SYSTEM')
+    res = db.get_all_books()
+    for i in res:
+        for j in i:
+            print(j, end='\t')
     db.close()  # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露

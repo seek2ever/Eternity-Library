@@ -8,11 +8,11 @@ import sys
 import time
 
 import fitz
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog, QVBoxLayout, QMessageBox
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog, QVBoxLayout, QMessageBox
 
 from database import DatabaseManager
-from el_gui import Tips
+from utils import Tips
 
 
 class ScanBookFiles(QWidget):
@@ -46,7 +46,7 @@ class ScanBookFiles(QWidget):
             self.selected_directory_label.setText(scan_directory)  # 将用户选择的文件夹路径显示在标签控件上
             self.scan_book_files(scan_directory)  # 调用scan_book_files函数扫描文件夹中的电子书
         else:
-            QMessageBox.warning(self, "提示", "未选择扫描路径！扫描已取消。", QMessageBox.Ok)
+            QMessageBox.warning(self, "提示", "未选择扫描路径！扫描已取消。", QMessageBox.StandardButton.Ok)
             self.close()
 
     def scan_book_files(self, directory):
@@ -74,30 +74,35 @@ class ScanBookFiles(QWidget):
 
             # 如果没有找到任何电子书文件，则显示提示信息     TODO 待分离：界面显示代码与数据处理代码耦合
             if not books_found:
-                choose = QMessageBox.question(None, "提示", f"未扫描到书籍文件，是否手动检查以下路径：\n{directory}？",
-                                              QMessageBox.Yes | QMessageBox.No)
-                if choose == QMessageBox.Yes:
+                choose = QMessageBox.question(None, "提示",
+                                              f"未扫描到书籍文件，是否手动检查以下路径：\n{directory}？",
+                                              QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                                              )
+                if choose == QMessageBox.StandardButton.Yes:
                     os.startfile(directory)  # 打开相应的文件夹
 
             # 显示询问弹窗，让用户决定是否继续扫描其他文件夹
-            reply = QMessageBox.question(None, "提示", "扫描完成！是否继续扫描其他文件夹？",
-                                         QMessageBox.Yes | QMessageBox.No)
-            if reply == QMessageBox.Yes:
+            reply = QMessageBox.question(None,
+                                         "提示",
+                                         "扫描完成！是否继续扫描其他文件夹？",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                                         )
+            if reply == QMessageBox.StandardButton.Yes:
                 # 用户选择继续扫描，则再次调用select_directory()方法
                 self.select_directory()
-            elif reply == QMessageBox.No:
+            elif reply == QMessageBox.StandardButton.No:
                 # 用户选择结束扫描，则显示提示信息
-                Tips.information_msg(self, "扫描已结束！")
+                Tips.information_msg("扫描已结束！")
                 self.close()
                 # 目前已知问题：点击确定按钮后，窗口会关闭，但选择扫描路径的窗口仍然存在，需要手动关闭
 
-        # 扫描遇到错误时执行以下语句
+        # 扫描遇到错误的弹窗提示
         except FileNotFoundError:
-            Tips.information_msg(self, "系统找不到指定的文件，请重试。")
+            Tips.information_msg("系统找不到指定的文件，请重试。")
         except NotADirectoryError:
-            Tips.information_msg(self, "系统找不到指定的路径，请重试。")
+            Tips.information_msg("系统找不到指定的路径，请重试。")
         except PermissionError:
-            Tips.information_msg(self, "扫描路径无访问权限，请检查路径权限。")
+            Tips.information_msg("扫描路径无访问权限，请检查路径权限。")
         else:
             # 扫描未引发任何异常时，将扫描结果（存储在book_info字典中）写入数据库
             self.write_into_database(scan_info)
@@ -216,7 +221,7 @@ class PDFBooks(Books):
         pdf_doc = fitz.open(get_path)
         for page in pdf_doc:
             text = page.get_text()
-            print(text)
+            pass
 
 
 class TxtBooks(Books):
@@ -267,4 +272,4 @@ if __name__ == '__main__':
     scan_book = ScanBookFiles()
     scan_book.select_directory()
     scan_book.show()  # 显示窗口
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
