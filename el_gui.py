@@ -1,8 +1,18 @@
 import sys
 
-from PySide6 import QtCore, QtGui, QtWidgets
-from PySide6.QtCore import Qt, QCoreApplication
-from PySide6.QtWidgets import QMainWindow, QApplication, QVBoxLayout, QHBoxLayout, QMessageBox
+from PySide6.QtCore import QCoreApplication
+from PySide6 import (
+    QtGui,
+    QtWidgets,
+)
+
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QApplication,
+    QVBoxLayout,
+    QHBoxLayout,
+    QMessageBox,
+)
 
 from utils import Tips
 from books import ScanBookFiles
@@ -35,8 +45,11 @@ class MainWindow(QMainWindow):
 
         # 设置窗口图标
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("images/book_icon.png"),
-                       QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(
+            QtGui.QPixmap("images/book_icon.png"),
+            QtGui.QIcon.Normal,
+            QtGui.QIcon.Off
+            )
         self.setWindowIcon(icon)
 
         # 添加菜单栏
