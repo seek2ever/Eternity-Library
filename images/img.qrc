@@ -1,9 +1,0 @@
-<RCC>
-  <qresource prefix="png">
-    <file>background.png</file>
-    <file>book_icon.png</file>
-  </qresource>
-  <qresource prefix="svg">
-    <file>background.svg</file>
-  </qresource>
-</RCC>
