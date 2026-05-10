@@ -5,3 +5,6 @@ __pycache__/database.cpython-39.pyc
 # Python cache
 __pycache__/
 *.pyc
+
+# Untracked icons
+images/icons/保存.png
