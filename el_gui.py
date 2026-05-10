@@ -1,4 +1,5 @@
 import sys
+from typing import Optional
 
 from PySide6.QtCore import QCoreApplication
 from PySide6 import (
@@ -11,7 +12,11 @@ from PySide6.QtWidgets import (
     QApplication,
     QVBoxLayout,
     QHBoxLayout,
+    QMenuBar,
     QMessageBox,
+    QPushButton,
+    QStatusBar,
+    QTableWidget,
 )
 
 from utils import Tips
@@ -20,20 +25,21 @@ from database import DatabaseManager
 
 
 class MainWindow(QMainWindow):
-    bookWidget: QtWidgets.QListWidget       # 添加类型注释，防止Pylance报错
-
     def __init__(self):
         super().__init__()
-        self.book_list = None
-        self.clearButton = None
-        self.showButton = None
-        self.menubar = None
-        self.statusbar = None
-        self.closeButton = None
-        self.scanButton = None
         self.db = DatabaseManager()
         self.db.duplicate_book.connect(self.handle_duplicate_book)
         self.db.add_book_result.connect(self.show_add_result)
+        
+        # 初始化所有组件
+        self.book_list = QTableWidget()
+        self.closeButton: Optional[QPushButton] = None
+        self.showButton: Optional[QPushButton] = None
+        self.clearButton: Optional[QPushButton] = None
+        self.scanButton: Optional[QPushButton] = None
+        self.menubar: Optional[QMenuBar] = None
+        self.statusbar: Optional[QStatusBar] = None
+        
         self.setup_ui()
 
     def setup_ui(self):
@@ -46,19 +52,19 @@ class MainWindow(QMainWindow):
         # 设置窗口图标
         icon = QtGui.QIcon()
         icon.addPixmap(
-            QtGui.QPixmap("images/book_icon.png"),
+            QtGui.QPixmap("images/icons/book_icon.png"),
             QtGui.QIcon.Normal,
             QtGui.QIcon.Off
             )
         self.setWindowIcon(icon)
 
         # 添加菜单栏
-        self.menubar = QtWidgets.QMenuBar(self)
+        self.menubar = QMenuBar(self)
         self.menubar.setObjectName("menubar")
         self.setMenuBar(self.menubar)
 
         # 添加状态栏
-        self.statusbar = QtWidgets.QStatusBar(self)
+        self.statusbar = QStatusBar(self)
         self.statusbar.setObjectName("statusbar")
         self.setStatusBar(self.statusbar)
         self.statusbar.showMessage("欢迎使用三木书斋")
@@ -81,7 +87,7 @@ class MainWindow(QMainWindow):
         self.showButton = QtWidgets.QPushButton(self)
         self.showButton.setText(self._translate("Show books information.", "显示书籍信息"))
         self.showButton.setFixedSize(200, 50)
-        # self.showButton.clicked.connect(self.get_book_info)
+        self.showButton.clicked.connect(self.show_book_info)
         h_layout.addWidget(self.showButton)
 
         # 添加“取消显示”按钮
@@ -100,12 +106,12 @@ class MainWindow(QMainWindow):
         # 将按钮添加到布局
         h_layout.addWidget(self.scanButton)
 
-        # 添加“书籍列表”表格
-        self.book_list = QtWidgets.QTableWidget()
+        # 添加"书籍列表"表格
+        self.book_list = QTableWidget()
         self.book_list.setObjectName("book_list")
         # 获取数据库中各列的标题信息，用于创建列
         books_data = self.db.get_all_books()
-        if books_data and len(books_data) > 0:
+        if books_data:
             self.book_list.setRowCount(len(books_data))
             self.book_list.setColumnCount(len(books_data[0]))
         else:
@@ -120,10 +126,10 @@ class MainWindow(QMainWindow):
         # 如果在“书籍列表”添加布局后再将列表控件添加到布局中，则按钮会显示在显示框下方
         v_layout.addWidget(self.book_list)
 
-        # 将布局添加到窗口
-        main_layout = QtWidgets.QWidget()
-        main_layout.setLayout(v_layout)
-        self.setCentralWidget(main_layout)
+        # 将布局添加到窗口，setCentralWidget()要求传入的参数必须是QWidget类型
+        central_widget = QtWidgets.QWidget()
+        central_widget.setLayout(v_layout)
+        self.setCentralWidget(central_widget)
 
         # 设置按钮字号
         self.setStyleSheet("""
@@ -132,6 +138,8 @@ class MainWindow(QMainWindow):
         font-family: Microsoft YaHei;
         }
         """)
+        # 启动时显示书籍信息
+        self.show_book_info()
 
     def scan_books(self):
         """
@@ -144,7 +152,7 @@ class MainWindow(QMainWindow):
     def show_book_info(self):
         """获取书籍信息并展示"""
         try:
-            book_db = self.db.get_all_books()
+            book_db: list = self.db.get_all_books()
             # 清空列表中现有的数据
             self.book_list.clearContents()
             # 如果没有找到相关书籍信息，则弹出提示框
@@ -163,29 +171,6 @@ class MainWindow(QMainWindow):
                 self.book_list.setAlternatingRowColors(True)        # 隔行交替颜色
         except Exception as e:
             Tips.information_msg(f"获取书籍信息时发生错误：{e}")
-
-    # def get_book_info(self, item=None):
-    #     """
-    #     获取书籍信息并展示在列表控件（QListWidget）
-    #     :return:
-    #     """
-    #     book_db = DatabaseManager()
-    #     books = book_db.get_all_books()
-    #     # 如果没有找到相关书籍信息，则弹出提示框
-    #     if not books:
-    #         Tips.information_msg("书籍索引信息为空。")
-    #     # 如果找到相关书籍信息，则展示在列表控件中
-    #     else:
-    #         self.bookWidget.clear()
-    #         for book in books:
-    #             if isinstance(book, tuple):
-    #                 book_str = ', '.join([str(value) for value in book])
-    #                 self.bookWidget.addItem(book_str)
-    #             else:
-    #                 QMessageBox.warning(self, "警告", f"书籍{book}的信息错误！")
-    #
-    #     for i in range(self.bookWidget.count()):
-    #         item = self.bookWidget.item(i)
 
     def handle_duplicate_book(self, book_name):
         """
