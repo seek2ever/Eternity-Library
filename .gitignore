@@ -1,3 +1,7 @@
 __pycache__/database.cpython-39.pyc
 __pycache__/database.cpython-39.pyc
 /exercise.py
+
+# Python cache
+__pycache__/
+*.pyc
