@@ -8,3 +8,6 @@ __pycache__/
 
 # Untracked icons
 images/icons/保存.png
+
+# Claude Code config
+.claude/

@@ -261,6 +261,36 @@ class DatabaseManager(QObject):
         books = self.cursor.fetchall()
         return books
 
+    def get_books_by_type(self, book_type):
+        """
+        根据书籍类型获取书籍信息
+        :param book_type: 书籍类型
+        :return: 所有书籍信息列表，元素是一个元组
+        """
+        sql = "SELECT * FROM books_information WHERE book_type=?"
+        self.cursor.execute(sql, (book_type,))
+        return self.cursor.fetchall()
+
+    def get_books_by_status(self, status):
+        """
+        根据书籍状态获取书籍信息
+        :param status: 书籍状态
+        :return: 所有书籍信息列表，元素是一个元组
+        """
+        sql = "SELECT * FROM books_information WHERE status=?"
+        self.cursor.execute(sql, (status,))
+        return self.cursor.fetchall()
+
+    def get_books_by_author(self, author):
+        """
+        根据作者获取书籍信息
+        :param author: 作者名称
+        :return: 所有书籍信息列表，元素是一个元组
+        """
+        sql = "SELECT * FROM books_information WHERE author=?"
+        self.cursor.execute(sql, (author,))
+        return self.cursor.fetchall()
+
     def close(self):
         self.cursor.close()
         self.connection.close()

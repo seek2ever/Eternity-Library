@@ -1,22 +1,33 @@
 import sys
 from typing import Optional
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import (
+    QCoreApplication,
+    Qt,
+)
 from PySide6 import (
     QtGui,
-    QtWidgets,
 )
 
 from PySide6.QtWidgets import (
-    QMainWindow,
     QApplication,
-    QVBoxLayout,
+    QFrame,
     QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QMainWindow,
     QMenuBar,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QSplitter,
+    QStackedWidget,
     QStatusBar,
     QTableWidget,
+    QTableWidgetItem,
+    QTreeWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
 from utils import Tips
@@ -27,10 +38,14 @@ from database import DatabaseManager
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.left_panel = None
+        self.list_view = None
+        self.cover_view = None
+        self.right_stack = None
         self.db = DatabaseManager()
         self.db.duplicate_book.connect(self.handle_duplicate_book)
         self.db.add_book_result.connect(self.show_add_result)
-        
+
         # 初始化所有组件
         self.book_list = QTableWidget()
         self.closeButton: Optional[QPushButton] = None
@@ -38,8 +53,9 @@ class MainWindow(QMainWindow):
         self.clearButton: Optional[QPushButton] = None
         self.scanButton: Optional[QPushButton] = None
         self.menubar: Optional[QMenuBar] = None
+        self.splitter: Optional[QSplitter] = None
         self.statusbar: Optional[QStatusBar] = None
-        
+
         self.setup_ui()
 
     def setup_ui(self):
@@ -55,7 +71,7 @@ class MainWindow(QMainWindow):
             QtGui.QPixmap("images/icons/book_icon.png"),
             QtGui.QIcon.Normal,
             QtGui.QIcon.Off
-            )
+        )
         self.setWindowIcon(icon)
 
         # 添加菜单栏
@@ -63,48 +79,235 @@ class MainWindow(QMainWindow):
         self.menubar.setObjectName("menubar")
         self.setMenuBar(self.menubar)
 
+        # 创建QSplitter作为左右分区的容器
+        self.splitter = QSplitter(Qt.Horizontal)
+        self.left_panel = self._create_left_panel()
+
+        # 创建右侧视图容器
+        self.right_stack = QStackedWidget()
+        self.cover_view = self._create_cover_view()  # 封面视图
+        self.list_view = self._create_list_view()  # 列表视图
+        self.right_stack.addWidget(self.cover_view)
+        self.right_stack.addWidget(self.list_view)
+        self.right_stack.setCurrentIndex(0)  # 设置默认视图（当前默认为封面视图）
+
+        # 将左右组件加入QSplitter
+        self.splitter.addWidget(self.left_panel)
+        self.splitter.addWidget(self.right_stack)
+        self.splitter.setStretchFactor(0, 1)  # 左侧比例
+        self.splitter.setStretchFactor(1, 3)  # 右侧比例（更大）
+
+        self.setCentralWidget(self.splitter)
+
         # 添加状态栏
         self.statusbar = QStatusBar(self)
         self.statusbar.setObjectName("statusbar")
         self.setStatusBar(self.statusbar)
         self.statusbar.showMessage("欢迎使用三木书斋")
+        # self.setStyleSheet("""
+        # QPushButton {font-size: 11pt; font-family: Microsoft YaHei;}
+        # QListWidget {font-size: 11pt; font-family: Microsoft YaHei;}
+        # """)
 
-        # 按钮之间的水平布局
-        h_layout = QHBoxLayout()
-        # 按钮和显示列表的垂直布局
-        v_layout = QVBoxLayout()
+        # 设置按钮字号
+        self.setStyleSheet("""
+        QPushButton {font-size: 11pt; font-family: Microsoft YaHei;}
+        QListWidget {font-size: 11pt; font-family: Microsoft YaHei;}
+        """)
+        # 启动时显示书籍信息
+        self.show_book_info()
 
-        # 添加“关闭”按钮
-        self.closeButton = QtWidgets.QPushButton(self)
-        self.closeButton.setObjectName("pushButton")
-        self.closeButton.setText(self._translate("Close", "关闭"))
-        self.closeButton.clicked.connect(self.close)
-        self.closeButton.setFixedSize(80, 50)
-        # 将按钮添加到布局
-        h_layout.addWidget(self.closeButton)
+    def _create_left_panel(self):
+        """创建左侧面板"""
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(12)
 
-        # 添加“显示书籍信息”按钮
-        self.showButton = QtWidgets.QPushButton(self)
-        self.showButton.setText(self._translate("Show books information.", "显示书籍信息"))
-        self.showButton.setFixedSize(200, 50)
-        self.showButton.clicked.connect(self.show_book_info)
-        h_layout.addWidget(self.showButton)
+        # 视图切换区
+        view_label = QLabel(self._translate("Views", "视图模式"))
+        view_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
 
-        # 添加“取消显示”按钮
-        self.clearButton = QtWidgets.QPushButton(self)
-        self.clearButton.setText(self._translate("Not show", "取消显示"))
-        self.clearButton.setFixedSize(140, 50)
-        self.clearButton.clicked.connect(self.close_info)
-        h_layout.addWidget(self.clearButton)
+        self.toggle_view_btn = QPushButton("切换到列表视图")
+        self.toggle_view_btn.setFixedHeight(36)
+        self.toggle_view_btn.clicked.connect(self._toggle_view_mode)
 
-        # 添加“扫描文件”按钮
-        self.scanButton = QtWidgets.QPushButton(self)
-        self.scanButton.setObjectName("scanButton")
-        self.scanButton.setText(self._translate("Scan Files", "扫描文件"))
-        self.scanButton.clicked.connect(self.scan_books)
-        self.scanButton.setFixedSize(140, 50)
-        # 将按钮添加到布局
-        h_layout.addWidget(self.scanButton)
+        layout.addWidget(view_label)
+        layout.addWidget(self.toggle_view_btn)
+
+        # 分隔线
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(line)
+
+        # 分类筛选区
+        filter_label = QLabel(self._translate("Filter", "分类筛选"))
+        filter_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
+
+        self.category_list = QListWidget()
+        self.category_list.addItems([
+            "全部书籍",
+            "按书籍类型",
+            "按阅读状态",
+            "按作者",
+        ])
+        self.category_list.setFixedHeight(140)
+        self.category_list.currentRowChanged.connect(self._on_category_changed)
+
+        layout.addWidget(filter_label)
+        layout.addWidget(self.category_list)
+
+        # 分隔线
+        line_2 = QFrame()
+        line_2.setFrameShape(QFrame.HLine)
+        line_2.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(line_2)
+
+        # 快捷操作区
+        action_label = QLabel(self._translate("Actions", "快捷操作"))
+        action_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
+
+        self.scan_button = QPushButton(self._translate("Scan Files", "扫描文件"))
+        self.scan_button.setFixedHeight(36)
+        self.scan_button.clicked.connect(self.scan_books)
+
+        self.show_button = QPushButton(self._translate("Show books information.", "显示书籍信息"))
+        self.show_button.setFixedHeight(36)
+        self.show_button.clicked.connect(self.show_book_info)
+
+        self.clear_button = QPushButton(self._translate("Not show", "取消显示"))
+        self.clear_button.setFixedHeight(36)
+        self.clear_button.clicked.connect(self.close_info)
+
+        self.close_button = QPushButton(self._translate("Close", "关闭"))
+        self.close_button.setFixedHeight(36)
+        self.close_button.clicked.connect(self.close)
+
+        layout.addWidget(action_label)
+        layout.addWidget(self.scan_button)
+        layout.addWidget(self.show_button)
+        layout.addWidget(self.clear_button)
+        layout.addWidget(self.close_button)
+        # 弹簧：将内容推到顶部
+        layout.addStretch()
+        panel.setFixedWidth(220)
+        return panel
+
+    def _create_cover_view(self):
+        """切换视图模式"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        # 容器 widget
+        container = QWidget()
+        self.cover_grid = QVBoxLayout(container)
+        self.cover_grid.setContentsMargins(16, 16, 16, 16)
+
+        # 顶部工具栏
+        toolbar = QHBoxLayout()
+        mode_label = QLabel(self._translate("Views", "封面模式"))
+        mode_label.setStyleSheet("font-size: 13pt; font-weight: bold;")
+        toolbar.addWidget(mode_label)
+        toolbar.addStretch()
+        self.cover_grid.addLayout(toolbar)
+
+        # 封面网格容器
+        self.cover_grid_area = QWidget()
+        self.cover_grid_layout = QVBoxLayout(self.cover_grid_area)
+        self.cover_grid_layout.setSpacing(12)
+        self.cover_grid_layout.addWidget(self.cover_grid_area)
+
+        self.cover_grid.addStretch()
+        scroll.setWidget(container)
+        return scroll
+
+    def _create_book_card(self, book_name, author, book_type):
+        """创建单本书籍卡片"""
+        card = QFrame()
+        card.setFrameShape(QFrame.StyledPanel)
+        card.setFixedSize(180, 260)
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 8px;
+            }
+            QFrame.hover {
+                background-color: #e9ecef;
+                border-color: #adb5bd;
+            }
+        """)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+        layout.setAlignment(Qt.AlignCenter)
+
+        # 封面占位图标（后续可用书籍封面缩略图替换）
+        cover_label = QLabel()
+        cover_label.setFixedSize(140, 180)
+        cover_label.setAlignment(Qt.AlignCenter)
+        cover_label.setStyleSheet("""
+            background-color: #ced4da;
+            border-radius: 4px;
+            font-size: 48px;
+        """)
+        cover_label.setText("封面")
+        cover_label.setObjectName("cover_" + book_name)
+
+        # 书名
+        name_label = QLabel(book_name)
+        name_label.setAlignment(Qt.AlignCenter)
+        name_label.setWordWrap(True)
+        name_label.setMaximumHeight(50)
+        name_label.setStyleSheet("""
+            font-size: 10pt;
+            font-weight: bold;
+        """)
+
+        # 副信息
+        info_label = QLabel(author if author else book_type)
+        info_label.setAlignment(Qt.AlignCenter)
+        info_label.setStyleSheet("font-size: 9pt; color: #6c757d;")
+
+        layout.addWidget(cover_label)
+        layout.addWidget(name_label)
+        layout.addWidget(info_label)
+
+        # 点击卡片打开书籍
+        card.mousePressEvent = lambda event, bn=book_name: self._on_book(bn)
+        return card
+
+    def _on_book(self, book_name: str) -> None:
+        """点击书籍卡片，打开书籍信息（暂为占位）"""
+        # QMessageBox.information(None,"提示",f"打开书籍：{book_name}")
+        pass
+
+    def _clear_layout(self, layout) -> None:
+        """递归清空布局中的所有子项"""
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+            else:
+                sub_layout = item.layout()
+                if sub_layout:
+                    self._clear_layout(sub_layout)
+
+    def _create_list_view(self) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        toolbar = QHBoxLayout()
+        mode_label = QLabel(self._translate("Views", "列表模式"))
+        mode_label.setStyleSheet("font-size: 13pt; font-weight: bold;")
+        toolbar.addWidget(mode_label)
+        toolbar.addStretch()
+        layout.addLayout(toolbar)
 
         # 添加"书籍列表"表格
         self.book_list = QTableWidget()
@@ -121,25 +324,70 @@ class MainWindow(QMainWindow):
         self.book_list.setHorizontalHeaderLabels(self.db.transfer_title_type())  # 设置列标题
         self.book_list.clicked.connect(self.show_book_info)
 
-        # 将布局添加到窗口
-        v_layout.addLayout(h_layout)
-        # 如果在“书籍列表”添加布局后再将列表控件添加到布局中，则按钮会显示在显示框下方
-        v_layout.addWidget(self.book_list)
+        layout.addWidget(self.book_list)
+        return container
 
-        # 将布局添加到窗口，setCentralWidget()要求传入的参数必须是QWidget类型
-        central_widget = QtWidgets.QWidget()
-        central_widget.setLayout(v_layout)
-        self.setCentralWidget(central_widget)
+    def _toggle_view_mode(self) -> None:
+        """在封面模式和列表模式之间切换"""
+        current = self.right_stack.currentIndex()
+        if current == 0:
+            # 当前是封面模式，切换到列表模式
+            self.right_stack.setCurrentIndex(1)
+            self.toggle_view_btn.setText(self._translate("Views", "切换到封面视图"))
+            self.statusbar.showMessage(self._translate("Views", "已切换到列表视图"))
+        else:
+            # 当前是列表模式，切换到封面模式
+            self.right_stack.setCurrentIndex(0)
+            self.toggle_view_btn.setText(self._translate("Views", "切换到列表视图"))
+            self.refresh_cover_view()  # 切换到封面时刷新
+            self.statusbar.showMessage(self._translate("Views", "已切换到封面视图"))
 
-        # 设置按钮字号
-        self.setStyleSheet("""
-        QPushButton {
-        font-size: 11pt;
-        font-family: Microsoft YaHei;
-        }
-        """)
-        # 启动时显示书籍信息
-        self.show_book_info()
+    def _on_category_changed(self, row: int) -> None:
+        """左侧分类选择变化时触发"""
+        categories = ["全部", "按书籍类型", "按阅读状态", "按作者"]
+        if row < 0 or row >= len(categories):
+            return
+        category = categories[row]
+        self.statusbar.showMessage(self._translate("Views", f"已选择分类：{category}"))
+        if category == "全部":
+            books = self.db.get_all_books()
+        elif category == "按书籍类型":
+            books = self.db.get_books_by_type()
+        elif category == "按阅读状态":
+            books = self.db.get_books_by_status()
+        elif category == "按作者":
+            books = self.db.get_books_by_author()
+
+        # 刷新封面和列表视图
+        self.refresh_cover_view()
+
+    def refresh_cover_view(self) -> None:
+        """从数据库读取数据，刷新封面网格"""
+        books = self.db.get_all_books()
+        if not books:
+            return
+
+        # 清除旧卡片
+        self._clear_layout(self.cover_grid_layout)
+        # 每行显示4本书（可根据窗口宽度动态调整）
+        cols = 4
+        row_layout = None
+        for i, book in enumerate(books):
+            # book是一个元组，按数据库字段顺序排列
+            # 这里假设索引：1=book_name, 3=author, 11=book_type
+            book_name = book[1] if len(book) > 1 else "未知"
+            author = book[3] if len(book) > 4 else "未知"
+            book_type = book[11] if len(book) > 11 else "未知"
+
+            # 每cols本新建一行
+            if i % cols == 0:
+                row_layout = QHBoxLayout()
+                row_layout.setSpacing(16)
+                self.cover_grid_layout.addLayout(row_layout)
+
+            # 创建书籍卡片
+            card = self._create_book_card(book_name, author, book_type)
+            row_layout.addWidget(card)
 
     def scan_books(self):
         """
@@ -163,12 +411,12 @@ class MainWindow(QMainWindow):
             else:
                 for row, book_row in enumerate(book_db):
                     for col, book_data in enumerate(book_row):
-                        item = QtWidgets.QTableWidgetItem(str(book_data))
+                        item = QTableWidgetItem(str(book_data))
                         self.book_list.setItem(row, col, item)
                 # 调整内容显示
-                self.book_list.resizeRowsToContents()               # 调整行高
-                self.book_list.resizeColumnsToContents()            # 调整列宽
-                self.book_list.setAlternatingRowColors(True)        # 隔行交替颜色
+                self.book_list.resizeRowsToContents()  # 调整行高
+                self.book_list.resizeColumnsToContents()  # 调整列宽
+                self.book_list.setAlternatingRowColors(True)  # 隔行交替颜色
         except Exception as e:
             Tips.information_msg(f"获取书籍信息时发生错误：{e}")
 
