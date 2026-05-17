@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>_clear_layout 递归调用示意图</title>
+<style>
+    body {
+        font-family: "Microsoft YaHei", sans-serif;
+        background: #1e1e2e;
+        color: #cdd6f4;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 24px;
+        line-height: 1.7;
+    }
+    h1 { color: #cba6f7; border-bottom: 2px solid #45475a; padding-bottom: 8px; }
+    h2 { color: #89b4fa; margin-top: 32px; }
+    code {
+        background: #313244;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 14px;
+        color: #f5c2e7;
+    }
+    pre {
+        background: #181825;
+        padding: 16px;
+        border-radius: 8px;
+        overflow-x: auto;
+        font-size: 14px;
+        border: 1px solid #45475a;
+    }
+    .code-block {
+        background: #181825;
+        padding: 16px;
+        border-radius: 8px;
+        border-left: 4px solid #cba6f7;
+        margin: 16px 0;
+    }
+    .card {
+        background: #313244;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 16px 0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .step {
+        background: #181825;
+        border-left: 4px solid #a6e3a1;
+        padding: 12px 16px;
+        margin: 8px 0;
+        border-radius: 0 8px 8px 0;
+    }
+    .step-recursive {
+        border-left-color: #f9e2af;
+    }
+    .step-delete {
+        border-left-color: #f38ba8;
+    }
+    .highlight { color: #f5c2e7; font-weight: bold; }
+    .hl-green { color: #a6e3a1; }
+    .hl-yellow { color: #f9e2af; }
+    .hl-red { color: #f38ba8; }
+    .hl-blue { color: #89b4fa; }
+    .box {
+        display: inline-block;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: bold;
+        margin: 3px;
+        border: 2px solid;
+    }
+    .box-layout { background: #45475a; border-color: #89b4fa; color: #89b4fa; }
+    .box-widget { background: #45475a; border-color: #a6e3a1; color: #a6e3a1; }
+    .box-sublayout { background: #45475a; border-color: #f9e2af; color: #f9e2af; }
+    .box-deleted { background: #45475a; border-color: #f38ba8; color: #f38ba8; text-decoration: line-through; opacity: 0.5; }
+    .arrow { color: #6c7086; font-size: 20px; margin: 0 4px; }
+    svg { display: block; margin: 16px auto; max-width: 100%; }
+</style>
+</head>
+<body>
+
+<h1>_clear_layout 递归调用详解</h1>
+
+<div class="card">
+    <p>在 Qt 布局系统中，一个 <strong>QLayout</strong> 可以包含两种东西：</p>
+    <ul>
+        <li><span class="box box-widget">QWidget</span> — 实际控件（按钮、标签、输入框等）</li>
+        <li><span class="box box-sublayout">QLayout（子布局）</span> — 嵌套的另一个布局，里面可以再装控件或更深层的子布局</li>
+    </ul>
+    <p><code>_clear_layout</code> 的职责：<strong>递归清空</strong>整个布局树，把每个控件都删除干净。</p>
+</div>
+
+<h2>源代码</h2>
+<div class="code-block">
+<pre>
+def _clear_layout(self, layout) -> None:
+    """递归清空布局中的所有子项"""
+    while layout.count():                    <span style="color:#6c7086;"># ① 只要布局里还有东西...</span>
+        item = layout.takeAt(0)              <span style="color:#6c7086;"># ② 取出第 0 项（同时从布局中移除）</span>
+        widget = item.widget()               <span style="color:#6c7086;"># ③ 判断它是控件还是子布局</span>
+        if widget:                           <span style="color:#6c7086;"># ④ 如果是控件 → 直接删除</span>
+            widget.deleteLater()
+        else:                                <span style="color:#6c7086;"># ⑤ 否则是子布局 → 递归调用自己</span>
+            sub_layout = item.layout()
+            if sub_layout:
+                self._clear_layout(sub_layout)
+</pre>
+</div>
+
+<h2>示意图：递归清空的过程</h2>
+
+<p>假设我们有如下布局结构（这是一个典型的 <code>QVBoxLayout</code> 嵌套场景）：</p>
+
+<svg viewBox="0 0 860 360" xmlns="http://www.w3.org/2000/svg">
+    <!-- 最外层布局（根） -->
+    <rect x="30" y="20" width="800" height="320" rx="12" fill="#313244" stroke="#89b4fa" stroke-width="2.5" stroke-dasharray="6,3"/>
+    <text x="50" y="50" fill="#89b4fa" font-size="14" font-weight="bold">根布局 root_layout (QVBoxLayout)</text>
+
+    <!-- 第一项：标签控件 -->
+    <rect x="60" y="70" width="200" height="50" rx="6" fill="#45475a" stroke="#a6e3a1" stroke-width="2"/>
+    <text x="90" y="100" fill="#a6e3a1" font-size="13">① QLabel("书名")</text>
+
+    <!-- 第二项：水平子布局 -->
+    <rect x="60" y="140" width="740" height="90" rx="8" fill="#313244" stroke="#f9e2af" stroke-width="2" stroke-dasharray="6,3"/>
+    <text x="80" y="165" fill="#f9e2af" font-size="13">② QHBoxLayout（子布局）</text>
+
+    <rect x="80" y="180" width="150" height="36" rx="4" fill="#45475a" stroke="#a6e3a1" stroke-width="1.5"/>
+    <text x="105" y="203" fill="#a6e3a1" font-size="11">QPushButton("确定")</text>
+
+    <rect x="250" y="180" width="150" height="36" rx="4" fill="#45475a" stroke="#a6e3a1" stroke-width="1.5"/>
+    <text x="110" y="203" fill="#a6e3a1" font-size="11">QPushButton("取消")</text>
+
+    <text x="440" y="203" fill="#6c7086" font-size="11">┄ ⭐ 子布局里又有 2 个控件</text>
+
+    <!-- 第三项：分隔线控件 -->
+    <rect x="60" y="250" width="200" height="50" rx="6" fill="#45475a" stroke="#a6e3a1" stroke-width="2"/>
+    <text x="90" y="280" fill="#a6e3a1" font-size="13">③ QFrame(分隔线)</text>
+
+    <!-- 箭头标注 -->
+    <text x="520" y="310" fill="#6c7086" font-size="12">这是一棵布局树：布局套布局，最底层是控件</text>
+</svg>
+
+<h2>执行流程分步拆解</h2>
+
+<div class="card">
+    <div class="step">
+        <strong><span class="hl-green">第 1 轮循环</span></strong><br>
+        <code>layout.count()</code> → <strong>3</strong>（布局里有 3 项）<br>
+        <code>layout.takeAt(0)</code> → 取出 <span class="box box-widget">QLabel("书名")</span><br>
+        <code>item.widget()</code> 返回控件 → <code><span class="hl-red">widget.deleteLater()</span></code> ✅ 删除
+        <p style="color:#6c7086;font-size:13px;margin:8px 0 0 0;">结果：根布局剩余 2 项 [QHBoxLayout, QFrame]</p>
+    </div>
+
+    <div class="step step-recursive">
+        <strong><span class="hl-yellow">第 2 轮循环</span></strong><br>
+        <code>layout.takeAt(0)</code> → 取出 <span class="box box-sublayout">QHBoxLayout（子布局）</span><br>
+        <code>item.widget()</code> 返回 <code>None</code>（它不是控件！）<br>
+        → 进入 <code>else</code> 分支，拿到 <code>sub_layout = QHBoxLayout</code><br>
+        → <strong><span class="hl-yellow">递归调用</span></strong> <code>_clear_layout(sub_layout)</code>
+        <p style="color:#6c7086;font-size:13px;margin:8px 0 0 0;">进入子布局的递归...</p>
+    </div>
+
+    <div style="margin-left: 32px; border-left: 2px solid #585b70; padding-left: 16px;">
+        <div class="step">
+            <strong><span class="hl-green">子布局 第 1 轮循环</span></strong><br>
+            <code>sub_layout.count()</code> → <strong>2</strong><br>
+            <code>sub_layout.takeAt(0)</code> → 取出 <span class="box box-widget">QPushButton("确定")</span><br>
+            → <code><span class="hl-red">widget.deleteLater()</span></code> ✅ 删除
+        </div>
+        <div class="step">
+            <strong><span class="hl-green">子布局 第 2 轮循环</span></strong><br>
+            <code>sub_layout.takeAt(0)</code> → 取出 <span class="box box-widget">QPushButton("取消")</span><br>
+            → <code><span class="hl-red">widget.deleteLater()</span></code> ✅ 删除
+        </div>
+        <div class="step">
+            <strong>子布局 <code>count()</code> 为 0 → 退出 while，<span class="hl-yellow">递归返回</span></strong>
+        </div>
+    </div>
+
+    <div class="step step-delete">
+        <strong><span class="hl-blue">第 3 轮循环（回到根布局）</span></strong><br>
+        <code>layout.takeAt(0)</code> → 取出 <span class="box box-widget">QFrame(分隔线)</span><br>
+        → <code><span class="hl-red">widget.deleteLater()</span></code> ✅ 删除
+        <p style="color:#6c7086;font-size:13px;margin:8px 0 0 0;">根布局 count() 为 0 → 退出 while → 方法返回。全部清空！</p>
+    </div>
+</div>
+
+<h2>用一句话理解</h2>
+
+<div class="card" style="background:#181825;border:1px solid #cba6f7;">
+    <p style="font-size:16px;text-align:center;">
+        <strong>遇到控件 → 删掉；遇到布局 → 进去把里面清空，再出来继续删</strong>
+    </p>
+</div>
+
+<h2>为什么用递归？</h2>
+
+<div class="card">
+    <p>如果不递归，嵌套布局的清空需要这样写：</p>
+    <pre>
+# 伪代码：非递归方案（需要手动遍历每一层）
+for item in layout:
+    if item is layout:
+        for sub_item in item:
+            if sub_item is layout:
+                for sub_sub_item in sub_item:
+                    ...  ← 嵌套多深写多深，不可行
+    </pre>
+    <p>布局嵌套的层数不确定，所以需要递归——让函数自己调用自己，<strong>不管多深都能兜底</strong>。</p>
+</div>
+
+<h2>关键细节</h2>
+
+<div class="card">
+    <ul>
+        <li>
+            <strong>为什么用 <code>takeAt(0)</code> 而不是 <code>itemAt(i)</code>？</strong><br>
+            <code>takeAt</code> 会<strong>移除</strong>该项并返回；<code>itemAt</code> 只读不删。如果用 <code>itemAt</code> + <code>removeItem</code>，需要两步，且 index 会因前面的移除而变化。<code>takeAt(0)</code> 每次取第 0 项，<strong>简洁且安全</strong>。
+        </li>
+        <li style="margin-top:12px;">
+            <strong>为什么用 <code>deleteLater</code> 而不是 <code>delete</code>？</strong><br>
+            <code>deleteLater</code> 将删除推迟到事件循环的下一次处理，避免在布局迭代过程中直接销毁对象导致悬挂指针。这是一个 Qt 的<strong>安全实践</strong>。
+        </li>
+        <li style="margin-top:12px;">
+            <strong>while 循环而不是 for 循环？</strong><br>
+            因为 <code>takeAt</code> 会改变布局的 <code>count()</code>，for 循环的 range 在迭代期间会失效。while 每次重新检查 <code>count()</code>，是正确处理动态容器的标准写法。
+        </li>
+    </ul>
+</div>
+
+</body>
+</html>
