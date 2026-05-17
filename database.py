@@ -47,25 +47,36 @@ class DatabaseManager(QObject):
         """
         获取列的标题信息
         """
-        return self.cursor.execute("PRAGMA table_info(books_information)").fetchall()
+        titles = self.cursor.execute("PRAGMA table_info(books_information)").fetchall()
+        translations = [
+            {titles[0]: '书籍ID'},
+            {titles[1]: '书籍名称'},
+            {titles[2]: '书籍路径'},
+            {titles[3]: '添加时间'},
+            {titles[4]: '作者'},
+            {titles[5]: '国籍'},
+            {titles[6]: '译者'},
+            {titles[7]: '出版社'},
+            {titles[8]: '出版日期'},
+            {titles[9]: '书籍等级'},
+            {titles[10]: '阅读状态'},
+            {titles[11]: '书籍类型'},
+            {titles[12]: 'ISBN'},
+            {titles[13]: '页数'},
+            {titles[14]: '阅读进度'},
+            {titles[15]: '阅读时间'},
+            {titles[16]: '阅读日期'},
+            {titles[17]: '阅读链接'},
+            {titles[18]: '简介'}
+        ]
+        return titles
 
     def column_titles_translation(self):
         """
         获取列的标题信息并翻译
         """
-        # TODO: 函数内容待修改与完善
+        # TODO: translations内容采用键值对考虑是否比元组形式更好？
         titles = self.column_titles()
-        translations = [
-            ('book_id', '书籍ID'),
-            ('book_name', '书籍名称'),
-            ('book_path', '书籍路径'),
-            ('add_time', '添加时间'),
-            ('author', '作者'),
-            ('nationality', '国籍'),
-            ('translator', '译者'),
-            ('publisher', '出版社'),
-            ('publication_date', '出版日期'),
-        ]
 
     def transfer_title_type(self) -> list:
         """获取并提取标题列信息中的“标题”，用于设置显示在控件中的表格各列标题"""
@@ -298,8 +309,9 @@ class DatabaseManager(QObject):
 
 if __name__ == '__main__':
     db = DatabaseManager()
-    res = db.get_all_books()
+    res = db.column_titles()
+    num = 0
     for i in res:
-        for j in i:
-            print(j, end='\t')
+        num += 1
+        print(i.values())
     db.close()  # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露
