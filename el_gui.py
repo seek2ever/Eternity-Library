@@ -1,16 +1,16 @@
 import sys
+import time
 from typing import Optional
 
+from PySide6 import QtGui
 from PySide6.QtCore import (
     QCoreApplication,
-    Qt,
+    QMetaObject,
     QThread,
+    QTimer,
+    Qt,
     Signal,
 )
-from PySide6 import (
-    QtGui,
-)
-
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -32,9 +32,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from utils import Tips
 from books import ScanBookFiles
-from database import DatabaseManager
+from database import (
+    BookQueryWorker,
+    DatabaseManager,
+)
+from utils import Tips
 
 
 class MainWindow(QMainWindow):
@@ -45,12 +48,14 @@ class MainWindow(QMainWindow):
         self.db.duplicate_book.connect(self.handle_duplicate_book)
         self.db.add_book_result.connect(self.show_add_result)
 
+        self._setup_book_worker()
+
         # 声明所有将在子方法中创建的实例属性
         self.left_panel: Optional[QWidget] = None
         self.list_view: Optional[QWidget] = None
         self.cover_view: Optional[QScrollArea] = None
         self.right_stack: Optional[QStackedWidget] = None
-        
+
         # 左侧面板组件
         self.toggle_view_btn: Optional[QPushButton] = None
         self.category_list: Optional[QListWidget] = None
@@ -58,19 +63,39 @@ class MainWindow(QMainWindow):
         self.show_button: Optional[QPushButton] = None
         self.clear_button: Optional[QPushButton] = None
         self.close_button: Optional[QPushButton] = None
-        
+
         # 右侧视图组件
         self.book_list: Optional[QTableWidget] = None
         self.cover_grid: Optional[QVBoxLayout] = None
         self.cover_grid_area: Optional[QWidget] = None
         self.cover_grid_layout: Optional[QVBoxLayout] = None
-        
+
         # 窗口组件
         self.menubar: Optional[QMenuBar] = None
         self.splitter: Optional[QSplitter] = None
         self.statusbar: Optional[QStatusBar] = None
 
         self.setup_ui()
+
+    def _setup_book_worker(self):
+        """初始化后台查询线程、缓存变量"""
+        # 缓存最后一次查询结果
+        self._books_cache = None
+        self._cache_timestamp = 0  # 缓存时间戳
+
+        # 创建后台查询线程
+        self._query_thread = QThread()
+        # 创建Worker（传入数据库文件名，不传连接对象）
+        self._book_worker = BookQueryWorker(self.db.db_name)
+        # 把 Worker 移到工作线程（此后Worker的所有槽函数在工作线程执行）
+        self._book_worker.moveToThread(self._query_thread)
+        # 连接信号和槽
+        self._book_worker.books_ready.connect(self._on_books_loaded)
+        self._book_worker.query_error.connect(self._on_query_error)
+        # trigger_fetch → fetch_all_books：跨线程自动 QueuedConnection
+        self._book_worker.trigger_fetch.connect(self._book_worker.fetch_all_books)
+        # 启动工作线程
+        self._query_thread.start()
 
     def setup_ui(self):
         # 设置窗口属性
@@ -99,11 +124,11 @@ class MainWindow(QMainWindow):
 
         # 创建右侧视图容器
         self.right_stack = QStackedWidget()
-        self.cover_view = self._create_cover_view()     # 封面视图
-        self.list_view = self._create_list_view()       # 列表视图
+        self.cover_view = self._create_cover_view()  # 封面视图
+        self.list_view = self._create_list_view()  # 列表视图
         self.right_stack.addWidget(self.cover_view)
         self.right_stack.addWidget(self.list_view)
-        self.right_stack.setCurrentIndex(1)             # 设置默认视图（当前默认为封面视图），索引顺序与添加的顺序一致
+        self.right_stack.setCurrentIndex(1)  # 设置默认视图（当前默认为封面视图），索引顺序与添加的顺序一致
 
         # 将左右组件加入QSplitter
         self.splitter.addWidget(self.left_panel)
@@ -125,13 +150,13 @@ class MainWindow(QMainWindow):
         QListWidget {font-size: 11pt; font-family: Microsoft YaHei;}
         """)
         # 启动时显示书籍信息
-        self.show_book_info()       # 列表模式
+        self.show_book_info()  # 列表模式
         self.refresh_cover_view()
 
     def _create_left_panel(self):
         """创建左侧面板"""
         panel = QWidget()
-        panel.setFixedWidth(220)        # 设置左侧固定宽度
+        panel.setFixedWidth(220)  # 设置左侧固定宽度
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(12)
@@ -353,8 +378,9 @@ class MainWindow(QMainWindow):
         else:
             # 当前是列表模式，切换到封面模式
             self.right_stack.setCurrentIndex(0)
+            if self._books_cache is not None or (time.time() - self._cache_timestamp) >= 30:
+                self.refresh_cover_view()  # 切换到封面时刷新
             self.toggle_view_btn.setText(self._translate("Views", "切换到列表视图"))
-            self.refresh_cover_view()  # 切换到封面时刷新
             self.statusbar.showMessage(self._translate("Views", "已切换到封面视图"))
 
     def _on_category_changed(self, row: int) -> None:
@@ -378,32 +404,87 @@ class MainWindow(QMainWindow):
         self.refresh_cover_view()
 
     def refresh_cover_view(self) -> None:
-        """从数据库读取数据，刷新封面网格"""
-        books = self.db.get_all_books()
-        if not books:
+        """触发后台查询，若存在有效缓存则直接使用"""
+        # 缓存有效时直接渲染，不走数据库
+        # 缓存有效（30秒内），直接渲染，不走数据库
+        if self._books_cache is not None and (time.time() - self._cache_timestamp) < 30:
+            self._on_books_loaded(self._books_cache)
             return
 
+        # 缓存过期或不存在 → 触发后台线程查询
+        self._book_worker.trigger_fetch.emit()
+
+    def _on_books_loaded(self, books: list):
+        """收到后台查询结果（在主线程执行），缓存结果并启动渐进式渲染"""
+        if not books or len(books) == 0:
+            return
+
+        # 更新缓存
+        self._books_cache = books
+        self._cache_timestamp = time.time()
         # 清除旧卡片
         self._clear_layout(self.cover_grid_layout)
-        # 每行显示4本书（可根据窗口宽度动态调整）
-        cols = 4
-        row_layout = None
-        for i, book in enumerate(books):
-            # 索引：1=book_name, 4=author, 11=book_type
-            # TODO: 此处获取书籍信息的方法依赖于数据库中书籍信息的存在与否，需要对database.py中的delete_book()方法进行修改
+        # 启动渐进式渲染
+        self._render_cards_progressive(books)
+
+    def _render_cards_progressive(self, books: list):
+        """初始化渐进式渲染状态，启动第一批"""
+        self._pending_books = books     # 保存待渲染的书籍列表
+        self._current_book = 0         # 当前处理到的书籍索引
+        self._col_index = 0             # 当前列索引（用于布局）
+        self._cols = 4                  # 每行显示4个卡片
+
+        # 0ms 后立即执行第一批（在事件循环空闲时）
+        QTimer.singleShot(0, self._render_next_batch)
+
+    def _render_next_batch(self):
+        """创建下一批卡片（由 QTimer回调，在主线程执行）"""
+        # 渐进式渲染配置
+        batch_size = 32         # 每批创建的卡片数
+        batch_interval = 16     # 批次间隔(ms)，约60fps一帧
+        books = self._pending_books
+        cols = self._cols
+
+        for _ in range(batch_size):
+            if self._current_book >= len(books):
+                # 全部渲染完成，清理临时状态
+                self._pending_books = None
+                self.statusbar.showMessage(
+                    self._translate("Views", f"封面视图已刷新，共 {len(books)} 本书")
+                )
+                return
+
+            book = books[self._current_book]
+
+            # 提取书籍字段（索引对照数据库表结构）
             book_name = book[1] or "未知"
-            author = book[3] or "未知"
+            author = book[4] or "未知"
             book_type = book[11] or "未知"
 
-            # 每cols本新建一行
-            if i % cols == 0:
+            # 每 cols 本新建一个水平行
+            if self._col_index % cols == 0:
                 row_layout = QHBoxLayout()
                 row_layout.setSpacing(16)
                 self.cover_grid_layout.addLayout(row_layout)
 
-            # 创建书籍卡片
+            # 创建卡片并加入当前行
             card = self._create_book_card(book_name, author, book_type)
-            row_layout.addWidget(card)
+            # 获取当前行的最后一个布局（即刚加的那个行布局）
+            item = self.cover_grid_layout.itemAt(
+                self.cover_grid_layout.count() - 1
+            )
+            if item and item.layout():
+                item.layout().addWidget(card)
+
+            self._current_book += 1
+            self._col_index += 1
+
+        # 本批完成，延迟 batch_interval ms 后调度下一批
+        QTimer.singleShot(batch_interval, self._render_next_batch)
+
+    def _on_query_error(self, error_msg: str):
+        """查询出错时的处理"""
+        Tips.information_msg(f"数据库查询失败：{error_msg}")
 
     def scan_books(self):
         """
@@ -469,7 +550,23 @@ class MainWindow(QMainWindow):
 
     def show_add_result(self, success, message):
         """显示添加结果"""
-        QMessageBox.information(self, "操作结果", message)
+        if success:
+            Tips.information_msg(message)
+            self.show_book_info()
+            self.refresh_cover_view()
+            self.statusbar.showMessage(self._translate(
+                "success",
+                "已成功添加书籍"),
+                3000)
+        else:
+            Tips.information_msg(message)
+
+    def closeEvent(self, event):
+        """窗口关闭时安全退出后台线程"""
+        self._query_thread.quit()  # 退出线程的事件循环
+        self._query_thread.wait(3000)  # 等待线程结束（最多 3 秒）
+        self.db.close()  # 关闭数据库连接
+        event.accept()
 
     @staticmethod
     def _translate(context, text):
