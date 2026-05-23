@@ -1,8 +1,11 @@
-import sqlite3
 import random
 import sqlite3
 from typing import Union
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import (
+    QObject,
+    Signal,
+    Slot,
+)
 
 
 class DatabaseManager(QObject):
@@ -12,10 +15,10 @@ class DatabaseManager(QObject):
 
     def __init__(self, db_name='books_information.db'):
         super().__init__()
-        self.db_name = db_name  # 数据库名称
+        self.db_name = db_name                           # 数据库名称
         self.connection = sqlite3.connect(self.db_name)  # 连接到数据库
-        self.cursor = self.connection.cursor()  # 创建一个Cursor（游标）对象，用于执行SQL语句
-        self.pending_book = None  # 临时存储待处理的书籍数据
+        self.cursor = self.connection.cursor()           # 创建一个Cursor（游标）对象，用于执行SQL语句
+        self.pending_book = None                         # 临时存储待处理的书籍数据
 
     def create_table(self):
         self.cursor.execute("""
@@ -150,13 +153,16 @@ class DatabaseManager(QObject):
 
     def _insert_book(self, book_data):
         """实际插入数据的内部方法"""
-        columns = ', '.join(book_data.keys())
-        placeholders = ', '.join(['?'] * len(book_data))
-        sql = f"INSERT INTO books_information ({columns}) VALUES ({placeholders})"
-        self.cursor.execute(sql, tuple(book_data.values()))
-        self.set_book_id(book_data['book_name'])
-        self.connection.commit()
-        self.add_book_result.emit(True, f"书籍添加成功！")
+        try:
+            columns = ', '.join(book_data.keys())
+            placeholders = ', '.join(['?'] * len(book_data))
+            sql = f"INSERT INTO books_information ({columns}) VALUES ({placeholders})"
+            self.cursor.execute(sql, tuple(book_data.values()))
+            self.set_book_id(book_data['book_name'])
+            self.connection.commit()
+        except Exception as e:
+            self.add_book_result.emit(False, f"书籍添加失败！错误信息：{e}")
+            self.add_book_result.emit(True, f"书籍添加成功！")
 
     def set_book_id(self, book_name):
         """
@@ -199,7 +205,7 @@ class DatabaseManager(QObject):
         self.cursor.execute(sql, (book_name,))
         self.connection.commit()
 
-    def delete_all_books(self):
+    def _delete_all_books(self):
         """
         删除所有书籍信息
         """
@@ -219,7 +225,7 @@ class DatabaseManager(QObject):
         sql = f"UPDATE books_information SET {columns} WHERE book_name=?"
         self.cursor.execute(sql, values)
         self.connection.commit()
-        # TODO 待更新：用户修改本地文件名称时，自动更新数据库中的书籍名称
+        # TODO: 用户修改本地文件名称时，自动更新数据库中的书籍名称
 
     def check_book_info(self, book_name) -> str:
         """
@@ -305,6 +311,63 @@ class DatabaseManager(QObject):
     def close(self):
         self.cursor.close()
         self.connection.close()
+
+
+class BookQueryWorker(QObject):
+    """在后台线程中执行数据库查询，避免阻塞 UI 主线程
+
+    关键设计：
+    - __init__ 只接收 db_name（字符串），不接收连接/游标对象
+    - 每次查询在自己的线程内创建独立 sqlite3 连接，查完即关
+    - 这是 SQLite 线程安全的基本要求：连接不能跨线程共享
+    """
+    books_ready = Signal(list)    # 查询成功，携带书籍列表
+    query_error = Signal(str)     # 查询失败，携带错误信息
+    trigger_fetch = Signal()      # 触发 fetch_all_books 在后台线程执行
+
+    def __init__(self, db_name: str):
+        """
+        :param db_n名ame: 数据库文件（如 'books_information.db'）
+        """
+        super().__init__()
+        self.db_name = db_name
+
+    def _execute_query(self, sql: str, params: tuple = ()):
+        """在工作线程中执行查询，创建独立连接，查完即关"""
+        conn = sqlite3.connect(self.db_name)
+        try:
+            cursor = conn.cursor()
+            cursor.execute(sql, params)
+            result = cursor.fetchall()
+            cursor.close()
+            self.books_ready.emit(result)
+        except Exception as e:
+            self.query_error.emit(str(e))
+        finally:
+            conn.close()
+
+    @Slot()
+    def fetch_all_books(self):
+        """查询全部书籍（在工作线程中执行）"""
+        self._execute_query("SELECT * FROM books_information")
+
+    def fetch_books_by_type(self, book_type: str):
+        """按类型查询（预留，待后续接入分类筛选功能）"""
+        self._execute_query(
+            "SELECT * FROM books_information WHERE book_type=?", (book_type,)
+        )
+
+    def fetch_books_by_status(self, status: str):
+        """按阅读状态查询（预留）"""
+        self._execute_query(
+            "SELECT * FROM books_information WHERE read_status=?", (status,)
+        )
+
+    def fetch_books_by_author(self, author: str):
+        """按作者查询（预留）"""
+        self._execute_query(
+            "SELECT * FROM books_information WHERE author=?", (author,)
+        )
 
 
 if __name__ == '__main__':
