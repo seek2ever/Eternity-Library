@@ -1,4 +1,4 @@
-# cover_delegate.py
+# 绘制层
 from PySide6.QtCore import (
     QRect,
     QSize,
@@ -35,24 +35,24 @@ class CoverCardDelegate(QStyledItemDelegate):
     COVER_W = 140
     COVER_H = 180
     PADDING = 8
-    RADIUS = 8          # 圆角半径
+    RADIUS = 8  # 圆角半径
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self):
+        super().__init__()
 
         # 预创建所有绘制资源 —— 不在 paint() 里重复创建
         self.title_font = QFont("Microsoft YaHei", 10, QFont.Bold)
-        self.info_font  = QFont("Microsoft YaHei", 9)
-        self.placeholder_font = QFont("Microsoft YaHei", 14)
+        self.info_font = QFont("Microsoft YaHei", 9)
+        self.placeholder_font = QFont("Microsoft YaHei", 12)
 
-        self.color_card_bg        = QColor("#f8f9fa")
-        self.color_card_border    = QColor("#dee2e6")
-        self.color_card_hover_bg  = QColor("#e9ecef")
+        self.color_card_bg = QColor("#f8f9fa")
+        self.color_card_border = QColor("#dee2e6")
+        self.color_card_hover_bg = QColor("#e9ecef")
         self.color_card_hover_border = QColor("#adb5bd")
         self.color_placeholder_bg = QColor("#ced4da")
         self.color_placeholder_fg = QColor("#6c757d")
-        self.color_info           = QColor("#6c757d")
-        self.color_title          = QColor("#212529")
+        self.color_info = QColor("#6c757d")
+        self.color_title = QColor("#212529")
 
     # ── QStyledItemDelegate 必须实现的 3 个方法 ──
 
@@ -60,14 +60,14 @@ class CoverCardDelegate(QStyledItemDelegate):
         """绘制单个卡片。这是最核心的方法。
 
         Args:
-            painter: Qt 传入的 QPainter，已经设置好了裁剪区域
+            painter: Qt传入的 QPainter（画笔），已经设置好了裁剪区域
             option:  包含条目的矩形区域、状态（hover/selected/focus 等）
             index:   条目的模型索引，通过 index.data(role) 获取数据
         """
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # ── 状态判断 ──
+        # ── 判断鼠标悬停状态 ──
         is_hover = bool(option.state & QStyle.State_MouseOver)
 
         # ── 卡片背景矩形（在grid cell 内居中，留出间距） ──
