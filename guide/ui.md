@@ -102,17 +102,17 @@ def setup_ui(self):
 
     # 3. 创建右侧视图容器（QStackedWidget）
     self.right_stack = QStackedWidget()
-    self.cover_view = self._create_cover_view()   # 封面模式
-    self.list_view = self._create_list_view()     # 列表模式（复用现有表格）
-    self.right_stack.addWidget(self.cover_view)   # index 0
-    self.right_stack.addWidget(self.list_view)    # index 1
-    self.right_stack.setCurrentIndex(0)           # 默认显示封面模式
+    self.cover_view = self._create_cover_view()  # 封面模式
+    self.list_view = self._create_table_view()  # 列表模式（复用现有表格）
+    self.right_stack.addWidget(self.cover_view)  # index 0
+    self.right_stack.addWidget(self.list_view)  # index 1
+    self.right_stack.setCurrentIndex(0)  # 默认显示封面模式
 
     # 4. 将左右组件加入 QSplitter
     self.splitter.addWidget(self.left_panel)
     self.splitter.addWidget(self.right_stack)
-    self.splitter.setStretchFactor(0, 1)   # 左侧比例
-    self.splitter.setStretchFactor(1, 3)   # 右侧比例（更大）
+    self.splitter.setStretchFactor(0, 1)  # 左侧比例
+    self.splitter.setStretchFactor(1, 3)  # 右侧比例（更大）
 
     # 5. 将 splitter 设置为中心组件
     self.setCentralWidget(self.splitter)
@@ -385,23 +385,23 @@ def _create_list_view(self):
     toolbar.addStretch()
     layout.addLayout(toolbar)
 
-    # 复用现有的 book_list 表格
-    self.book_list = QTableWidget()
-    self.book_list.setObjectName("book_list")
+    # 复用现有的 book_table 表格
+    self.book_table = QTableWidget()
+    self.book_table.setObjectName("book_table")
 
     # 加载数据
     books_data = self.db.get_all_books()
     if books_data:
-        self.book_list.setRowCount(len(books_data))
-        self.book_list.setColumnCount(len(books_data[0]))
+        self.book_table.setRowCount(len(books_data))
+        self.book_table.setColumnCount(len(books_data[0]))
     else:
-        self.book_list.setRowCount(0)
-        self.book_list.setColumnCount(0)
+        self.book_table.setRowCount(0)
+        self.book_table.setColumnCount(0)
 
-    self.book_list.setHorizontalHeaderLabels(self.db.transfer_title_type())
-    self.book_list.clicked.connect(self.show_book_info)
+    self.book_table.setHorizontalHeaderLabels(self.db.transfer_title_type())
+    self.book_table.clicked.connect(self.show_book_info)
 
-    layout.addWidget(self.book_list)
+    layout.addWidget(self.book_table)
 
     return container
 ```

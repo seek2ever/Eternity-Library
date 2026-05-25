@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>后台线程触发方案修复：改用信号槽</title>
+<style>
+body { font-family: -apple-system, 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.7; background: #f8f9fa; color: #333; }
+h1 { border-bottom: 2px solid #4a9eff; padding-bottom: 8px; }
+h2 { color: #2c3e50; margin-top: 32px; }
+.diff { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 16px 0; overflow-x: auto; font-size: 14px; }
+.diff-add { background: #e6ffed; display: block; padding: 2px 8px; }
+.diff-remove { background: #ffeef0; display: block; padding: 2px 8px; }
+.diff-info { color: #6a737d; display: block; padding: 2px 8px; }
+code { background: #e8e8e8; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+.file-path { font-size: 16px; font-weight: bold; color: #4a9eff; margin: 24px 0 8px; }
+.note { background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; border-radius: 4px; margin: 16px 0; }
+.ok { background: #d4edda; border-left: 4px solid #28a745; padding: 12px 16px; border-radius: 4px; margin: 16px 0; }
+</style>
+</head>
+<body>
+
+<h1>🔧 后台线程触发方案修复</h1>
+
+<p><strong>问题诊断</strong>：<code>refresh_cover_view</code> 中调用 <code>QTimer.singleShot(0, self._book_worker.fetch_all_books)</code>，但 <code>QTimer.singleShot</code> 会在<strong>调用方所在线程</strong>（主线程）执行回调，<code>fetch_all_books</code> 实际上跑在主线程，没有利用后台线程。</p>
+
+<div class="ok">
+  <strong>✓ 修复方案</strong>：在 <code>BookQueryWorker</code> 中新增一个触发信号 <code>trigger_fetch</code>，连接到 <code>fetch_all_books</code> 槽函数。Qt 检测到跨线程时自动使用 <code>QueuedConnection</code>，确保方法在后台线程执行。
+</div>
+
+<h2>修改文件 1：database.py</h2>
+
+<div class="file-path">第 320 行附近，在 Signal 声明区域新增一个 trigger_fetch 信号</div>
+
+<p>修改前（第 320-321 行）：</p>
+<div class="diff">
+  <span class="diff-info">class BookQueryWorker(QObject):</span>
+  <span class="diff-info">    books_ready = Signal(list)</span>
+  <span class="diff-info">    query_error = Signal(str)</span>
+</div>
+
+<p>修改后：</p>
+<div class="diff">
+  <span class="diff-info">class BookQueryWorker(QObject):</span>
+  <span class="diff-info">    books_ready = Signal(list)</span>
+  <span class="diff-info">    query_error = Signal(str)</span>
+  <span class="diff-add">    trigger_fetch = Signal()  # 触发 fetch_all_books 在后台线程执行</span>
+</div>
+
+<p>同时，给 <code>fetch_all_books</code> 加上 <code>@Slot()</code> 装饰器（第 344 行）：</p>
+
+<p>修改前：</p>
+<div class="diff">
+  <span class="diff-info">    def fetch_all_books(self):</span>
+  <span class="diff-info">        """查询全部书籍（在工作线程中执行）"""</span>
+  <span class="diff-info">        self._execute_query("SELECT * FROM books_information")</span>
+</div>
+
+<p>修改后：</p>
+<div class="diff">
+  <span class="diff-add">    @Slot()</span>
+  <span class="diff-info">    def fetch_all_books(self):</span>
+  <span class="diff-info">        """查询全部书籍（在工作线程中执行）"""</span>
+  <span class="diff-info">        self._execute_query("SELECT * FROM books_information")</span>
+</div>
+
+<p class="note"><strong>注意</strong>：需要从 <code>PySide6.QtCore</code> 导入 <code>Slot</code>。检查文件顶部 import，如果已有 <code>Signal</code> 导入通常就够了，但 <code>@Slot()</code> 需要额外导入。如没有，在 <code>from PySide6.QtCore import ...</code> 中添加 <code>Slot</code>。</p>
+
+<hr>
+
+<h2>修改文件 2：el_gui.py</h2>
+
+<h3>修改 A：_setup_book_worker 方法（第 80-96 行）</h3>
+
+<p>在 connect 区域新增 trigger_fetch 的连接：</p>
+
+<p>修改前（第 92-94 行）：</p>
+<div class="diff">
+  <span class="diff-info">        # 连接信号和槽</span>
+  <span class="diff-info">        self._book_worker.books_ready.connect(self._on_books_loaded)</span>
+  <span class="diff-info">        self._book_worker.query_error.connect(self._on_query_error)</span>
+</div>
+
+<p>修改后：</p>
+<div class="diff">
+  <span class="diff-info">        # 连接信号和槽</span>
+  <span class="diff-info">        self._book_worker.books_ready.connect(self._on_books_loaded)</span>
+  <span class="diff-info">        self._book_worker.query_error.connect(self._on_query_error)</span>
+  <span class="diff-add">        # trigger_fetch → fetch_all_books：跨线程自动 QueuedConnection</span>
+  <span class="diff-add">        self._book_worker.trigger_fetch.connect(self._book_worker.fetch_all_books)</span>
+</div>
+
+<h3>修改 B：refresh_cover_view 方法（第 403-417 行）</h3>
+
+<p>把 QTimer.singleShot 改成 emit 信号：</p>
+
+<p>修改前（第 411-417 行）：</p>
+<div class="diff">
+  <span class="diff-info">        # 缓存过期或不存在 → 触发后台线程查询</span>
+  <span class="diff-remove">        # QMetaObject.invokeMethod(</span>
+  <span class="diff-remove">        #     self._book_worker,</span>
+  <span class="diff-remove">        #     b"fetch_all_books",</span>
+  <span class="diff-remove">        #     Qt.QueuedConnection  # 确保在工作线程的事件循环中执行</span>
+  <span class="diff-remove">        # )</span>
+  <span class="diff-remove">        QTimer.singleShot(0, self._book_worker.fetch_all_books)</span>
+</div>
+
+<p>修改后：</p>
+<div class="diff">
+  <span class="diff-info">        # 缓存过期或不存在 → 触发后台线程查询</span>
+  <span class="diff-add">        self._book_worker.trigger_fetch.emit()</span>
+</div>
+
+<p class="note"><strong>注意</strong>：修改后 <code>QTimer</code> 在 <code>el_gui.py</code> 中可能不再使用。如果 IDE 提示 <code>QTimer</code> 导入未使用，可以删除导入。不过保留也不影响运行，看你自己习惯。</p>
+
+<hr>
+
+<h2>完整修改对照</h2>
+
+<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; width:100%">
+<tr style="background:#4a9eff; color:white">
+  <th>文件</th>
+  <th>位置</th>
+  <th>操作</th>
+</tr>
+<tr>
+  <td><code>database.py</code></td>
+  <td>导入区</td>
+  <td>添加 <code>Slot</code> 导入（如没有的话）</td>
+</tr>
+<tr>
+  <td><code>database.py</code></td>
+  <td>第 321 行（Signal 行附近）</td>
+  <td>新增 <code>trigger_fetch = Signal()</code></td>
+</tr>
+<tr>
+  <td><code>database.py</code></td>
+  <td>第 344 行（fetch_all_books 前）</td>
+  <td>加 <code>@Slot()</code> 装饰器</td>
+</tr>
+<tr>
+  <td><code>el_gui.py</code></td>
+  <td>第 94 行（connect 区域）</td>
+  <td>新增 trigger_fetch → fetch_all_books 连接</td>
+</tr>
+<tr>
+  <td><code>el_gui.py</code></td>
+  <td>第 411-417 行</td>
+  <td>替换为 <code>self._book_worker.trigger_fetch.emit()</code></td>
+</tr>
+</table>
+
+<hr>
+
+<h2>改动前后的执行流程对比</h2>
+
+<p><strong>修改前（QTimer.singleShot）：</strong></p>
+<pre>
+refresh_cover_view()  [主线程]
+  └─ QTimer.singleShot(0, ...)  [定时器在主线程事件循环触发]
+      └─ fetch_all_books()  ❌ 仍然在主线程执行！
+</pre>
+
+<p><strong>修改后（信号槽）：</strong></p>
+<pre>
+refresh_cover_view()  [主线程]
+  └─ trigger_fetch.emit()
+      └─ Qt: 检测到跨线程 → 自动 QueuedConnection
+          └─ fetch_all_books()  ✅ 在后台线程的事件循环执行
+              └─ _execute_query()  [后台线程]
+                  ├─ 成功 → books_ready.emit(list)
+                  │         └─ MainThread 收到结果，_on_books_loaded 更新 UI
+                  └─ 失败 → query_error.emit(str)
+                            └─ MainThread 收到错误，_on_query_error 处理
+</pre>
+
+</body>
+</html>
