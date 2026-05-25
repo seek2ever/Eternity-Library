@@ -1,3 +1,4 @@
+# 数据层：只负责管理数据，不关心如何显示
 from PySide6.QtCore import (
     QAbstractListModel,
     QModelIndex,
@@ -30,10 +31,9 @@ class CoverCardModel(QAbstractListModel):
 
     def data(self, index, role=Qt.DisplayRole):
         """View 请求第 index.row() 条数据的 role 角色的值。
-
         View 会在需要绘制某个条目时调用这个方法。
         例如：View 说"给我第 42 个条目的 DisplayRole"，
-        我们就返回书名字符串。
+        就返回书名字符串。
         """
         if not index.isValid():
             return None
@@ -63,7 +63,6 @@ class CoverCardModel(QAbstractListModel):
 
     def set_books(self, books):
         """批量替换全部数据（数据库查询完成后调用）。
-
         使用 beginResetModel/endResetModel 通知 View：
         "数据全变了，请全部重绘"。
         """
