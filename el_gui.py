@@ -5,9 +5,8 @@ from typing import Optional
 from PySide6 import QtGui
 from PySide6.QtCore import (
     QCoreApplication,
-    QMetaObject,
+    QSize,
     QThread,
-    QTimer,
     Qt,
     Signal,
 )
@@ -16,18 +15,17 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QListView,
     QListWidget,
     QMainWindow,
     QMenuBar,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QSplitter,
     QStackedWidget,
     QStatusBar,
     QTableWidget,
     QTableWidgetItem,
-    QTreeWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -38,12 +36,14 @@ from database import (
     DatabaseManager,
 )
 from utils import Tips
+from cover_model import CoverCardModel
+from cover_delegate import CoverCardDelegate
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        # 先初始化数据库和信号连接
+        # 初始化数据库和信号连接
         self.db = DatabaseManager()
         self.db.duplicate_book.connect(self.handle_duplicate_book)
         self.db.add_book_result.connect(self.show_add_result)
@@ -53,8 +53,11 @@ class MainWindow(QMainWindow):
         # 声明所有将在子方法中创建的实例属性
         self.left_panel: Optional[QWidget] = None
         self.list_view: Optional[QWidget] = None
-        self.cover_view: Optional[QScrollArea] = None
+        self.cover_view: Optional[QWidget] = None
         self.right_stack: Optional[QStackedWidget] = None
+
+        self.cover_model = CoverCardModel()
+        self.cover_delegate = CoverCardDelegate()
 
         # 左侧面板组件
         self.toggle_view_btn: Optional[QPushButton] = None
@@ -65,10 +68,8 @@ class MainWindow(QMainWindow):
         self.close_button: Optional[QPushButton] = None
 
         # 右侧视图组件
-        self.book_list: Optional[QTableWidget] = None
-        self.cover_grid: Optional[QVBoxLayout] = None
-        self.cover_grid_area: Optional[QWidget] = None
-        self.cover_grid_layout: Optional[QVBoxLayout] = None
+        self.book_table: Optional[QTableWidget] = None
+        self.cover_list_view: Optional[QListView] = None
 
         # 窗口组件
         self.menubar: Optional[QMenuBar] = None
@@ -101,7 +102,7 @@ class MainWindow(QMainWindow):
         # 设置窗口属性
         self.setObjectName("main_window")
         self.setWindowTitle(self._translate("Eternity Library", "三木书斋"))
-        self.setGeometry(120, 140, 1200, 600)
+        self.setGeometry(120, 140, 1080, 620)
         self.setWindowOpacity(1)
 
         # 设置窗口图标
@@ -124,17 +125,18 @@ class MainWindow(QMainWindow):
 
         # 创建右侧视图容器
         self.right_stack = QStackedWidget()
-        self.cover_view = self._create_cover_view()  # 封面视图
-        self.list_view = self._create_list_view()  # 列表视图
+        self.cover_view = self._create_cover_view()     # 封面视图
+        self.list_view = self._create_table_view()      # 列表视图
         self.right_stack.addWidget(self.cover_view)
         self.right_stack.addWidget(self.list_view)
-        self.right_stack.setCurrentIndex(1)  # 设置默认视图（当前默认为封面视图），索引顺序与添加的顺序一致
+        # 设置默认视图（当前默认为封面视图），索引顺序与添加的顺序一致
+        self.right_stack.setCurrentIndex(0)
 
         # 将左右组件加入QSplitter
         self.splitter.addWidget(self.left_panel)
         self.splitter.addWidget(self.right_stack)
-        self.splitter.setStretchFactor(0, 1)  # 左侧比例
-        self.splitter.setStretchFactor(1, 3)  # 右侧比例（更大）
+        self.splitter.setStretchFactor(0, 1)    # 左侧比例
+        self.splitter.setStretchFactor(1, 3)    # 右侧比例（更大）
 
         self.setCentralWidget(self.splitter)
 
@@ -149,8 +151,7 @@ class MainWindow(QMainWindow):
         QPushButton {font-size: 11pt; font-family: Microsoft YaHei;}
         QListWidget {font-size: 11pt; font-family: Microsoft YaHei;}
         """)
-        # 启动时显示书籍信息
-        self.show_book_info()  # 列表模式
+
         self.refresh_cover_view()
 
     def _create_left_panel(self):
@@ -234,137 +235,76 @@ class MainWindow(QMainWindow):
         return panel
 
     def _create_cover_view(self):
-        """创建封面视图模式"""
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        # 容器 widget
-        container = QWidget()
-        self.cover_grid = QVBoxLayout(container)
-        self.cover_grid.setContentsMargins(16, 16, 16, 16)
-
-        # 顶部工具栏
-        toolbar = QHBoxLayout()
-        mode_label = QLabel(self._translate("Views", "封面模式"))
-        mode_label.setStyleSheet("font-size: 13pt; font-weight: bold;")
-        toolbar.addWidget(mode_label)
-        self.cover_grid.addLayout(toolbar)
-        toolbar.addStretch()
-
-        # 封面网格容器
-        self.cover_grid_area = QWidget()
-        self.cover_grid_layout = QVBoxLayout(self.cover_grid_area)
-        self.cover_grid_layout.setSpacing(12)
-        self.cover_grid.addWidget(self.cover_grid_area)
-
-        self.cover_grid.addStretch()
-        scroll.setWidget(container)
-        return scroll
-
-    def _create_book_card(self, book_name, author, book_type):
-        """创建单本书籍卡片"""
-        card = QFrame()
-        card.setFrameShape(QFrame.StyledPanel)
-        card.setFixedSize(180, 260)
-        card.setStyleSheet("""
-            QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 8px;
-            }
-            QFrame.hover {
-                background-color: #e9ecef;
-                border-color: #adb5bd;
-            }
-        """)
-
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(6)
-        layout.setAlignment(Qt.AlignCenter)
-
-        # 封面占位图标（后续可用书籍封面缩略图替换）
-        cover_label = QLabel()
-        cover_label.setFixedSize(140, 180)
-        cover_label.setAlignment(Qt.AlignCenter)
-        cover_label.setStyleSheet("""
-            background-color: #ced4da;
-            border-radius: 4px;
-            font-size: 48px;
-        """)
-        cover_label.setText("封面")
-        cover_label.setObjectName("cover_" + book_name)
-
-        # 书名标签
-        name_label = QLabel(book_name)
-        name_label.setAlignment(Qt.AlignCenter)
-        name_label.setWordWrap(True)
-        name_label.setMaximumHeight(50)
-        name_label.setStyleSheet("""
-            font-size: 10pt;
-            font-weight: bold;
-        """)
-
-        # 副信息
-        info_label = QLabel(author if author else book_type)
-        info_label.setAlignment(Qt.AlignCenter)
-        info_label.setStyleSheet("font-size: 9pt; color: #6c757d;")
-
-        layout.addWidget(cover_label)
-        layout.addWidget(name_label)
-        layout.addWidget(info_label)
-
-        # 点击卡片打开书籍
-        # card.mousePressEvent = lambda event, bn=book_name: self._on_book(bn)
-        return card
-
-    def _on_book(self, book_name: str) -> None:
-        """点击书籍卡片，打开书籍信息（暂为占位）"""
-        # QMessageBox.information(None,"提示",f"打开书籍：{book_name}")
-        pass
-
-    def _clear_layout(self, layout) -> None:
-        """递归清空布局中的所有子项"""
-        # 获取布局中的子项数（即只要存在控件或子布局，就一直执行）
-        while layout.count():
-            item = layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
-            else:
-                sub_layout = item.layout()
-                if sub_layout:
-                    self._clear_layout(sub_layout)
-
-    def _create_list_view(self) -> QWidget:
+        """创建封面视图 —— QListView + Delegate 虚拟化绘制"""
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(16, 16, 16, 16)
 
         toolbar = QHBoxLayout()
-        mode_label = QLabel(self._translate("Views", "列表模式"))
+        mode_label = QLabel(self._translate("Views", "封面模式"))
+        mode_label.setStyleSheet("font-size: 13pt; font-weight: bold;")
+        toolbar.addWidget(mode_label)
+        toolbar.addStretch()
+        layout.addLayout(toolbar)
+
+        self.cover_list_view = QListView()
+        self.cover_list_view.setModel(self.cover_model)
+        self.cover_list_view.setItemDelegate(self.cover_delegate)
+
+        self.cover_list_view.setViewMode(QListView.IconMode)
+        self.cover_list_view.setMovement(QListView.Static)
+        self.cover_list_view.setResizeMode(QListView.Adjust)
+        self.cover_list_view.setWrapping(True)
+        self.cover_list_view.setSpacing(4)
+        self.cover_list_view.setGridSize(QSize(
+            CoverCardDelegate.CARD_W + 16,
+            CoverCardDelegate.CARD_H + 10,
+        ))
+        self.cover_list_view.setUniformItemSizes(True)
+
+        self.cover_list_view.setFrameShape(QFrame.NoFrame)
+        self.cover_list_view.setBackgroundRole(QtGui.QPalette.Base)
+        self.cover_list_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.cover_list_view.setVerticalScrollMode(QListView.ScrollPerPixel)
+
+        self.cover_list_view.clicked.connect(self._on_cover_card_clicked)
+
+        layout.addWidget(self.cover_list_view)
+        return container
+
+    def _on_cover_card_clicked(self, index):
+        """点击封面卡片"""
+        book = self.cover_model.get_book(index.row())
+        if book:
+            self.statusbar.showMessage(f"选中：{book['name']}")
+
+    def _create_table_view(self) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        toolbar = QHBoxLayout()
+        mode_label = QLabel(self._translate("Table View", "列表模式"))
         mode_label.setStyleSheet("font-size: 13pt; font-weight: bold;")
         toolbar.addWidget(mode_label)
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
         # 添加"书籍列表"表格
-        self.book_list = QTableWidget()
-        self.book_list.setObjectName("book_list")
+        self.book_table = QTableWidget()
+        self.book_table.setObjectName("book_table")
         # 获取数据库中各列的标题信息，用于创建列
         books_data: list = self.db.get_all_books()
         if books_data:
-            self.book_list.setRowCount(len(books_data))
-            self.book_list.setColumnCount(len(books_data[0]))
+            self.book_table.setRowCount(len(books_data))
+            self.book_table.setColumnCount(len(books_data[0]))
         else:
-            self.book_list.setRowCount(0)
-            self.book_list.setColumnCount(0)
-        self.book_list.setHorizontalHeaderLabels(self.db.transfer_title_type())  # 设置列标题
-        self.book_list.clicked.connect(self.show_book_info)
+            self.book_table.setRowCount(0)
+            self.book_table.setColumnCount(0)
+        self.book_table.setHorizontalHeaderLabels(self.db.transfer_title_type())  # 设置列标题
+        self.book_table.clicked.connect(self.show_book_info)
 
-        layout.addWidget(self.book_list)
+        layout.addWidget(self.book_table)
         return container
 
     def _toggle_view_mode(self) -> None:
@@ -378,8 +318,8 @@ class MainWindow(QMainWindow):
         else:
             # 当前是列表模式，切换到封面模式
             self.right_stack.setCurrentIndex(0)
-            if self._books_cache is not None or (time.time() - self._cache_timestamp) >= 30:
-                self.refresh_cover_view()  # 切换到封面时刷新
+            if self._books_cache is None or (time.time() - self._cache_timestamp) >= 30:
+                self.refresh_cover_view()
             self.toggle_view_btn.setText(self._translate("Views", "切换到列表视图"))
             self.statusbar.showMessage(self._translate("Views", "已切换到封面视图"))
 
@@ -415,72 +355,15 @@ class MainWindow(QMainWindow):
         self._book_worker.trigger_fetch.emit()
 
     def _on_books_loaded(self, books: list):
-        """收到后台查询结果（在主线程执行），缓存结果并启动渐进式渲染"""
-        if not books or len(books) == 0:
+        """收到后台查询结果（在主线程执行），直接喂给 Model，View 自动刷新"""
+        if not books:
             return
-
-        # 更新缓存
         self._books_cache = books
         self._cache_timestamp = time.time()
-        # 清除旧卡片
-        self._clear_layout(self.cover_grid_layout)
-        # 启动渐进式渲染
-        self._render_cards_progressive(books)
-
-    def _render_cards_progressive(self, books: list):
-        """初始化渐进式渲染状态，启动第一批"""
-        self._pending_books = books     # 保存待渲染的书籍列表
-        self._current_book = 0         # 当前处理到的书籍索引
-        self._col_index = 0             # 当前列索引（用于布局）
-        self._cols = 4                  # 每行显示4个卡片
-
-        # 0ms 后立即执行第一批（在事件循环空闲时）
-        QTimer.singleShot(0, self._render_next_batch)
-
-    def _render_next_batch(self):
-        """创建下一批卡片（由 QTimer回调，在主线程执行）"""
-        # 渐进式渲染配置
-        batch_size = 32         # 每批创建的卡片数
-        batch_interval = 16     # 批次间隔(ms)，约60fps一帧
-        books = self._pending_books
-        cols = self._cols
-
-        for _ in range(batch_size):
-            if self._current_book >= len(books):
-                # 全部渲染完成，清理临时状态
-                self._pending_books = None
-                self.statusbar.showMessage(
-                    self._translate("Views", f"封面视图已刷新，共 {len(books)} 本书")
-                )
-                return
-
-            book = books[self._current_book]
-
-            # 提取书籍字段（索引对照数据库表结构）
-            book_name = book[1] or "未知"
-            author = book[4] or "未知"
-            book_type = book[11] or "未知"
-
-            # 每 cols 本新建一个水平行
-            if self._col_index % cols == 0:
-                row_layout = QHBoxLayout()
-                row_layout.setSpacing(16)
-                self.cover_grid_layout.addLayout(row_layout)
-
-            # 创建卡片并加入当前行
-            card = self._create_book_card(book_name, author, book_type)
-            # 获取当前行的最后一个布局（即刚加的那个行布局）
-            item = self.cover_grid_layout.itemAt(
-                self.cover_grid_layout.count() - 1
-            )
-            if item and item.layout():
-                item.layout().addWidget(card)
-
-            self._current_book += 1
-            self._col_index += 1
-
-        # 本批完成，延迟 batch_interval ms 后调度下一批
-        QTimer.singleShot(batch_interval, self._render_next_batch)
+        self.cover_model.set_books(books)
+        self.statusbar.showMessage(
+            self._translate("Views", f"封面视图已刷新，共 {len(books)} 本书")
+        )
 
     def _on_query_error(self, error_msg: str):
         """查询出错时的处理"""
@@ -499,7 +382,7 @@ class MainWindow(QMainWindow):
         try:
             book_db: list = self.db.get_all_books()
             # 清空列表中现有的数据
-            self.book_list.clearContents()
+            self.book_table.clearContents()
             # 如果没有找到相关书籍信息，则弹出提示框
             if not book_db:
                 Tips.information_msg("书籍索引信息为空。")
@@ -509,11 +392,11 @@ class MainWindow(QMainWindow):
                 for row, book_row in enumerate(book_db):
                     for col, book_data in enumerate(book_row):
                         item = QTableWidgetItem(str(book_data))
-                        self.book_list.setItem(row, col, item)
-                # 调整内容显示
-                self.book_list.resizeRowsToContents()  # 调整行高
-                self.book_list.resizeColumnsToContents()  # 调整列宽
-                self.book_list.setAlternatingRowColors(True)  # 隔行交替颜色
+                        self.book_table.setItem(row, col, item)
+
+                self.book_table.resizeRowsToContents()          # 调整行高
+                self.book_table.resizeColumnsToContents()       # 调整列宽
+                self.book_table.setAlternatingRowColors(True)   # 隔行交替颜色
         except Exception as e:
             Tips.information_msg(f"获取书籍信息时发生错误：{e}")
 
@@ -546,7 +429,7 @@ class MainWindow(QMainWindow):
     def close_info(self) -> None:
         """清除主界面的书籍信息"""
         # self.bookWidget.clear()
-        self.book_list.clearContents()
+        self.book_table.clearContents()
 
     def show_add_result(self, success, message):
         """显示添加结果"""
