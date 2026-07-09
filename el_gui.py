@@ -276,7 +276,7 @@ class MainWindow(QMainWindow):
         """点击封面卡片"""
         book = self.cover_model.get_book(index.row())
         if book:
-            self.statusbar.showMessage(f"选中：{book['name']}")
+            self.statusbar.showMessage(f"{book['name']}")
 
     def _create_table_view(self) -> QWidget:
         container = QWidget()
