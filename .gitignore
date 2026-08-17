@@ -9,5 +9,9 @@ __pycache__/
 # Untracked icons
 images/icons/保存.png
 
+# UI test files
+test.ui
+ui_files/
+
 # Claude Code config
 .claude/
