@@ -15,10 +15,10 @@ class DatabaseManager(QObject):
 
     def __init__(self, db_name='books_information.db'):
         super().__init__()
-        self.db_name = db_name                           # 数据库名称
+        self.db_name = db_name  # 数据库名称
         self.connection = sqlite3.connect(self.db_name)  # 连接到数据库
-        self.cursor = self.connection.cursor()           # 创建一个Cursor（游标）对象，用于执行SQL语句
-        self.pending_book = None                         # 临时存储待处理的书籍数据
+        self.cursor = self.connection.cursor()  # 创建一个Cursor（游标）对象，用于执行SQL语句
+        self.pending_book = None  # 临时存储待处理的书籍数据
 
     def create_table(self):
         self.cursor.execute("""
@@ -321,13 +321,13 @@ class BookQueryWorker(QObject):
     - 每次查询在自己的线程内创建独立 sqlite3 连接，查完即关
     - 这是 SQLite 线程安全的基本要求：连接不能跨线程共享
     """
-    books_ready = Signal(list)    # 查询成功，携带书籍列表
-    query_error = Signal(str)     # 查询失败，携带错误信息
-    trigger_fetch = Signal()      # 触发 fetch_all_books 在后台线程执行
+    books_ready = Signal(list)  # 查询成功，携带书籍列表
+    query_error = Signal(str)  # 查询失败，携带错误信息
+    trigger_fetch = Signal()  # 触发 fetch_all_books 在后台线程执行
 
     def __init__(self, db_name: str):
         """
-        :param db_n名ame: 数据库文件（如 'books_information.db'）
+        :param db_name: 数据库文件（如 'books_information.db'）
         """
         super().__init__()
         self.db_name = db_name
@@ -346,7 +346,7 @@ class BookQueryWorker(QObject):
         finally:
             conn.close()
 
-    @Slot()
+    @Slot()     # 把方法注册到 Qt的元对象系统，确保跨线程排队调用时正确识别执行
     def fetch_all_books(self):
         """查询全部书籍（在工作线程中执行）"""
         self._execute_query("SELECT * FROM books_information")
