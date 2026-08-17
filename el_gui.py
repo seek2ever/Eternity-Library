@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
     QListView,
     QListWidget,
     QMainWindow,
-    QMenuBar,
     QMessageBox,
     QPushButton,
     QSplitter,
@@ -72,7 +71,6 @@ class MainWindow(QMainWindow):
         self.cover_list_view: Optional[QListView] = None
 
         # 窗口组件
-        self.menubar: Optional[QMenuBar] = None
         self.splitter: Optional[QSplitter] = None
         self.statusbar: Optional[QStatusBar] = None
 
@@ -86,7 +84,7 @@ class MainWindow(QMainWindow):
 
         # 创建后台查询线程
         self._query_thread = QThread()
-        # 创建Worker（传入数据库文件名，不传连接对象）
+        # 创建Worker（传入数据库文件名books_information.db，不传连接对象）
         self._book_worker = BookQueryWorker(self.db.db_name)
         # 把 Worker 移到工作线程（此后Worker的所有槽函数在工作线程执行）
         self._book_worker.moveToThread(self._query_thread)
@@ -114,19 +112,14 @@ class MainWindow(QMainWindow):
         )
         self.setWindowIcon(icon)
 
-        # 添加菜单栏
-        self.menubar = QMenuBar(self)
-        self.menubar.setObjectName("menubar")
-        self.setMenuBar(self.menubar)
-
         # 创建QSplitter作为左右分区的容器
         self.splitter = QSplitter(Qt.Horizontal)
         self.left_panel = self._create_left_panel()
 
         # 创建右侧视图容器
         self.right_stack = QStackedWidget()
-        self.cover_view = self._create_cover_view()     # 封面视图
-        self.list_view = self._create_table_view()      # 列表视图
+        self.cover_view = self._create_cover_view()     # 封面视图，索引为0
+        self.list_view = self._create_table_view()      # 列表视图，索引为1
         self.right_stack.addWidget(self.cover_view)
         self.right_stack.addWidget(self.list_view)
         # 设置默认视图（当前默认为封面视图），索引顺序与添加的顺序一致
@@ -160,7 +153,7 @@ class MainWindow(QMainWindow):
         panel.setFixedWidth(220)  # 设置左侧固定宽度
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
 
         # 视图切换区
         view_label = QLabel(self._translate("Views", "视图模式"))
@@ -272,7 +265,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.cover_list_view)
         return container
 
-    def _on_cover_card_clicked(self, index):
+    def _on_cover_card_clicked(self, index) -> None:
         """点击封面卡片"""
         book = self.cover_model.get_book(index.row())
         if book:
@@ -283,7 +276,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(container)
         layout.setContentsMargins(16, 16, 16, 16)
 
-        toolbar = QHBoxLayout()
+        toolbar = QHBoxLayout()     # 列表视图最上方的标签行
         mode_label = QLabel(self._translate("Table View", "列表模式"))
         mode_label.setStyleSheet("font-size: 13pt; font-weight: bold;")
         toolbar.addWidget(mode_label)
@@ -313,9 +306,10 @@ class MainWindow(QMainWindow):
         if current == 0:
             # 当前是封面模式，切换到列表模式
             self.right_stack.setCurrentIndex(1)
+            self.show_book_info()
             self.toggle_view_btn.setText(self._translate("Views", "切换到封面视图"))
             self.statusbar.showMessage(self._translate("Views", "已切换到列表视图"))
-        else:
+        elif current == 1:
             # 当前是列表模式，切换到封面模式
             self.right_stack.setCurrentIndex(0)
             if self._books_cache is None or (time.time() - self._cache_timestamp) >= 30:
@@ -354,7 +348,7 @@ class MainWindow(QMainWindow):
         # 缓存过期或不存在 → 触发后台线程查询
         self._book_worker.trigger_fetch.emit()
 
-    def _on_books_loaded(self, books: list):
+    def _on_books_loaded(self, books: list) -> None:
         """收到后台查询结果（在主线程执行），直接喂给 Model，View 自动刷新"""
         if not books:
             return
@@ -365,11 +359,11 @@ class MainWindow(QMainWindow):
             self._translate("Views", f"封面视图已刷新，共 {len(books)} 本书")
         )
 
-    def _on_query_error(self, error_msg: str):
+    def _on_query_error(self, error_msg: str) -> None:
         """查询出错时的处理"""
         Tips.information_msg(f"数据库查询失败：{error_msg}")
 
-    def scan_books(self):
+    def scan_books(self) -> None:
         """
         调用books模块中的ScanBookFiles类扫描书籍
         :return:
@@ -377,7 +371,7 @@ class MainWindow(QMainWindow):
         scan_dialog = ScanBookFiles()
         selected_files = scan_dialog.select_directory()
 
-    def show_book_info(self):
+    def show_book_info(self) -> None:
         """获取书籍信息并展示"""
         try:
             book_db: list = self.db.get_all_books()
@@ -400,7 +394,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             Tips.information_msg(f"获取书籍信息时发生错误：{e}")
 
-    def handle_duplicate_book(self, book_name):
+    def handle_duplicate_book(self, book_name) -> None:
         """
         处理重复的书籍信息
         :param book_name:
@@ -431,7 +425,7 @@ class MainWindow(QMainWindow):
         # self.bookWidget.clear()
         self.book_table.clearContents()
 
-    def show_add_result(self, success, message):
+    def show_add_result(self, success, message) -> None:
         """显示添加结果"""
         if success:
             Tips.information_msg(message)
@@ -444,7 +438,7 @@ class MainWindow(QMainWindow):
         else:
             Tips.information_msg(message)
 
-    def closeEvent(self, event):
+    def closeEvent(self, event) -> None:
         """窗口关闭时安全退出后台线程"""
         self._query_thread.quit()  # 退出线程的事件循环
         self._query_thread.wait(3000)  # 等待线程结束（最多 3 秒）
@@ -452,7 +446,7 @@ class MainWindow(QMainWindow):
         event.accept()
 
     @staticmethod
-    def _translate(context, text):
+    def _translate(context, text) -> str:
         return QCoreApplication.translate(context, text)
 
 
