@@ -21,4 +21,5 @@
 ## 项目笔记  
 ### ScanBookFiles类中scan_book_files方法：
 1. any_books_found = False，用于判断是否有新书被添加，若有则在最后返回True，否则返回False；使用if not any_books_found进行判断时，若any_books_found为False（即if not any_books_found的值为Ture）时，满足Python的真值测试（在Python中，if后面的条件为True时执行后面的代码，否则跳过）；
-2. GUI界面部件增加布局后，数据库中的数据可以正常显示；
+2. GUI界面部件增加布局后，数据库中的数据可以正常显示；  
+3. 后台查询线程逻辑：创建新线程对象
