@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
 
         # 右侧视图组件
         self.book_table: Optional[QTableWidget] = None
-        self.cover_list_view: Optional[QListView] = None
+        self.cover_list_view: QListView
 
         # 窗口组件
         self.splitter: Optional[QSplitter] = None
@@ -93,7 +93,7 @@ class MainWindow(QMainWindow):
         self._book_worker.query_error.connect(self._on_query_error)
         # trigger_fetch → fetch_all_books：跨线程自动 QueuedConnection
         self._book_worker.trigger_fetch.connect(self._book_worker.fetch_all_books)
-        # 启动工作线程
+        # 启动工作线程，进入事件循环
         self._query_thread.start()
 
     def setup_ui(self):
@@ -145,7 +145,7 @@ class MainWindow(QMainWindow):
         QListWidget {font-size: 11pt; font-family: Microsoft YaHei;}
         """)
 
-        self.refresh_cover_view()
+        self.refresh_view()
 
     def _create_left_panel(self):
         """创建左侧面板"""
@@ -312,8 +312,7 @@ class MainWindow(QMainWindow):
         elif current == 1:
             # 当前是列表模式，切换到封面模式
             self.right_stack.setCurrentIndex(0)
-            if self._books_cache is None or (time.time() - self._cache_timestamp) >= 30:
-                self.refresh_cover_view()
+            self.refresh_view()
             self.toggle_view_btn.setText(self._translate("Views", "切换到列表视图"))
             self.statusbar.showMessage(self._translate("Views", "已切换到封面视图"))
 
@@ -335,11 +334,10 @@ class MainWindow(QMainWindow):
             books = self.db.get_books_by_author()
 
         # 刷新封面和列表视图
-        self.refresh_cover_view()
+        self.refresh_view()
 
-    def refresh_cover_view(self) -> None:
+    def refresh_view(self) -> None:
         """触发后台查询，若存在有效缓存则直接使用"""
-        # 缓存有效时直接渲染，不走数据库
         # 缓存有效（30秒内），直接渲染，不走数据库
         if self._books_cache is not None and (time.time() - self._cache_timestamp) < 30:
             self._on_books_loaded(self._books_cache)
@@ -356,7 +354,7 @@ class MainWindow(QMainWindow):
         self._cache_timestamp = time.time()
         self.cover_model.set_books(books)
         self.statusbar.showMessage(
-            self._translate("Views", f"封面视图已刷新，共 {len(books)} 本书")
+            self._translate("Views", f"已刷新，共 {len(books)} 本书")
         )
 
     def _on_query_error(self, error_msg: str) -> None:
@@ -369,7 +367,7 @@ class MainWindow(QMainWindow):
         :return:
         """
         scan_dialog = ScanBookFiles()
-        selected_files = scan_dialog.select_directory()
+        scan_dialog.select_directory()
 
     def show_book_info(self) -> None:
         """获取书籍信息并展示"""
@@ -430,7 +428,7 @@ class MainWindow(QMainWindow):
         if success:
             Tips.information_msg(message)
             self.show_book_info()
-            self.refresh_cover_view()
+            self.refresh_view()
             self.statusbar.showMessage(self._translate(
                 "success",
                 "已成功添加书籍"),
