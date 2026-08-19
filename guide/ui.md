@@ -419,7 +419,7 @@ def _toggle_view_mode(self):
     else:  # 当前是列表，切换到封面
         self.right_stack.setCurrentIndex(0)
         self.toggle_view_btn.setText("切换到列表视图")
-        self.refresh_cover_view()  # 切换到封面时刷新
+        self.refresh_view()  # 切换到封面时刷新
         self.statusbar.showMessage("已切换为封面模式")
 ```
 
@@ -442,14 +442,14 @@ def _on_category_changed(self, row):
     if category == "全部":
         books = self.db.get_all_books()
     elif category == "按书籍类型":
-        books = self.db.get_books_by_type(...)   # 需要在 database.py 新增方法
+        books = self.db.get_books_by_type(...)  # 需要在 database.py 新增方法
     elif category == "按阅读状态":
         books = self.db.get_books_by_status(...)  # 需要在 database.py 新增方法
     elif category == "按作者":
         books = self.db.get_books_by_author(...)  # 需要在 database.py 新增方法
 
     # 刷新封面和列表视图
-    self.refresh_cover_view()
+    self.refresh_view()
     # 也刷新列表视图（略）
 ```
 
