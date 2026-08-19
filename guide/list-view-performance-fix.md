@@ -128,17 +128,17 @@ def _populate_table(self, books: list) -> None:
 # 修改：show_book_info() 不再直接调用 self.db.get_all_books()
 # ─────────────────────────────────────────────────────────────
 def show_book_info(self) -> None:
-    """获取书籍信息并展示。
+   """获取书籍信息并展示。
 
-    修改要点：这里不再直接执行数据库查询。
-    数据获取统一交给 refresh_cover_view() → 后台线程 → _on_books_loaded()。
-    好处：
-      1. 数据库查询从主线程挪到后台线程，界面不再被 I/O 阻塞；
-      2. 查询结果会同时刷新封面视图和列表视图，两处数据保持一致；
-      3. 表格的填充由 _populate_table() 的防重复机制控制，
-         切换视图时不会重复重建表格。
-    """
-    self.refresh_cover_view()
+   修改要点：这里不再直接执行数据库查询。
+   数据获取统一交给 refresh_cover_view() → 后台线程 → _on_books_loaded()。
+   好处：
+     1. 数据库查询从主线程挪到后台线程，界面不再被 I/O 阻塞；
+     2. 查询结果会同时刷新封面视图和列表视图，两处数据保持一致；
+     3. 表格的填充由 _populate_table() 的防重复机制控制，
+        切换视图时不会重复重建表格。
+   """
+   self.refresh_view()
 ```
 
 ### 4.2 行为变化说明
