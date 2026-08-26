@@ -1,0 +1,13 @@
+sequenceDiagram
+    participant User
+    participant Widget
+    User->>Widget: 拖拽进入
+    Widget->>Widget: dragEnterEvent
+    Widget-->>User: accept / ignore
+    User->>Widget: 拖拽移动
+    Widget->>Widget: dragMoveEvent
+    User->>Widget: 松开鼠标
+    Widget->>Widget: dropEvent
+    Widget->>Widget: 读取数据并处理
+    User->>Widget: 离开区域
+    Widget->>Widget: dragLeaveEvent
