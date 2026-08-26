@@ -357,10 +357,12 @@ class MainWindow(QMainWindow):
             self._translate("Views", f"已刷新，共 {len(books)} 本书")
         )
 
+    @staticmethod
     def _on_query_error(self, error_msg: str) -> None:
         """查询出错时的处理"""
         Tips.information_msg(f"数据库查询失败：{error_msg}")
 
+    @staticmethod
     def scan_books(self) -> None:
         """
         调用books模块中的ScanBookFiles类扫描书籍
