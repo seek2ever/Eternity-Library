@@ -1,37 +1,62 @@
 import sys
-from PySide6.QtWidgets import (QApplication, QWidget, QGridLayout,
-                                QPushButton, QLineEdit)
 
-class CalculatorDemo(QWidget):
+from PySide6.QtGui import QFont, QKeyEvent
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QWidget,
+    QLabel,
+    QGridLayout,
+    QPushButton,
+    QSizePolicy,
+    QTextEdit,
+)
+from PySide6.QtCore import Qt, QEvent
+
+
+class MyWidget(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('基础网格布局示例')
+        self.setWindowTitle('QMouseEvent示例')
+        self.resize(800, 600)
+        self.setAcceptDrops(True)
+        self.setup_ui()
 
-        # 1. 创建布局对象
-        layout = QGridLayout()
+    def setup_ui(self):
+        self.label = QLabel("默认文本")
+        self.label.setAlignment(Qt.AlignCenter)
+        self.label.setAcceptDrops(True)
+        self.btn = QPushButton("点击我")
 
-        # 2. 创建一个显示框，放在第0行，横跨4列
-        display = QLineEdit()
-        display.setReadOnly(True)
-        layout.addWidget(display, 0, 0, 1, 4)
+        self.text_box = QTextEdit()
 
-        # 3. 按钮文本和位置 (行, 列)
-        buttons = [
-            ('7', 1, 0), ('8', 1, 1), ('9', 1, 2), ('/', 1, 3),
-            ('4', 2, 0), ('5', 2, 1), ('6', 2, 2), ('*', 2, 3),
-            ('1', 3, 0), ('2', 3, 1), ('3', 3, 2), ('-', 3, 3),
-            ('0', 4, 0), ('.', 4, 1), ('=', 4, 2), ('+', 4, 3),
-        ]
+        self.frame = QFrame()
 
-        for text, row, col in buttons:
-            button = QPushButton(text)
-            layout.addWidget(button, row, col)
+        layout = QGridLayout(self)
+        layout.addWidget(self.label, 0, 0)
+        layout.addWidget(self.btn, 0, 1)
+        layout.addWidget(self.text_box, 1, 0)
+        layout.addWidget(self.frame, 1, 1)
 
-        # 4. 将布局设置为窗口的主布局
-        self.setLayout(layout)
+        layout.setRowStretch(0, 1)
+        layout.setRowStretch(1, 1)
+        layout.setColumnStretch(0, 1)
+        layout.setColumnStretch(1, 1)
+
+        for w in (self.label, self.btn, self.text_box, self.frame):
+            w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            w.setFont(QFont("Microsoft YaHei", 12))
+
+    def dragEnterEvent(self, event):
+        if event.type() == QEvent.DragEnter:
+            pass
+
+    def dragLeaveEvent(self, event):
+        self.label.setText("鼠标移出")
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    window = CalculatorDemo()
+    window = MyWidget()
     window.show()
     sys.exit(app.exec())
