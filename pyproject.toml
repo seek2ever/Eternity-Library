@@ -8,43 +8,51 @@ authors = [
 ]
 requires-python = ">=3.12, <3.13"
 dependencies = [
-    "altgraph==0.17.3",
-    "auto-py-to-exe==2.46.0",
-    "bottle==0.13.2",
-    "bottle-websocket==0.2.9",
-    "certifi==2025.1.31",
-    "cffi==1.17.1",
-    "charset-normalizer==3.4.1",
-    "click==8.1.7",
-    "colorama==0.4.6",
-    "eel==0.18.1",
-    "future==1.0.0",
-    "gevent==24.11.1",
-    "gevent-websocket==0.10.1",
-    "greenlet==3.1.1",
-    "idna==3.10",
-    "importlib-metadata==7.1.0",
-    "packaging==24.2",
-    "pefile==2023.2.7",
-    "pycparser==2.22",
-    "pyinstaller==6.12.0",
-    "pyinstaller-hooks-contrib==2025.2",
-    "pymupdf==1.24.0",
-    "pymupdfb==1.24.0",
-    "pyparsing==3.2.3",
-    "pypiwin32==223",
-    "pyside6==6.6.3",
-    "pyside6-addons==6.6.3",
-    "pyside6-essentials==6.6.3",
-    "python-dotenv==1.0.1",
-    "pywin32==312",
-    "pywin32-ctypes==0.2.3",
-    "requests==2.32.3",
-    "typing-extensions==4.13.0",
-    "urllib3==2.3.0",
-    "zipp==3.21.0",
-    "zope-event==5.0",
-    "zope-interface==7.2",
+    # ==================== 核心依赖：程序正常运行必需 ====================
+    "pyside6>=6.6.3",  # GUI 框架主包，会自动带上 essentials / addons / shiboken6
+    "pyside6-addons>=6.6.3",  # PySide6 附加组件，由 pyside6 自动安装
+    "pyside6-essentials>=6.6.3",  # PySide6 核心组件（QtCore/QtGui/QtWidgets），由 pyside6 自动安装
+    "pymupdf>=1.24.0",  # PDF 解析库，代码里 `import fitz`，读取封面和文字
+    "pymupdfb>=1.24.0",  # PyMuPDF 的二进制底层库，由 pymupdf 自动安装
+
+    # ============== 打包工具链：只在"打包成 exe"时需要，平时运行用不到 ==============
+    "auto-py-to-exe>=2.50.1",  # PyInstaller 的图形化打包工具
+    "pyinstaller>=6.12.0",  # 打包引擎，把 Python 程序打包成 exe
+    "pyinstaller-hooks-contrib>=2025.2",  # PyInstaller 针对第三方库的兼容钩子
+    "altgraph>=0.17.3",  # pyinstaller 内部依赖（依赖关系图计算）
+    "pefile>=2023.2.7",  # pyinstaller 内部依赖（解析 Windows PE 文件）
+    "pywin32-ctypes>=0.2.3",  # pyinstaller 内部依赖（Windows API 的 ctypes 封装）
+    "packaging>=24.2",  # 版本号解析工具（pyinstaller 的依赖）
+    "requests>=2.33.0",  # HTTP 请求库（auto-py-to-exe 用来检查 PyInstaller 新版本，本项目不做联网）
+    "python-dotenv>=1.2.3",  # 读取 .env 环境变量（auto-py-to-exe 的依赖）
+    "certifi>=2025.1.31",  # SSL 证书库（requests 的依赖）
+    "charset-normalizer>=3.4.1",  # 字符编码检测（requests 的依赖）
+    "idna>=3.10",  # 国际化域名编码（requests 的依赖）
+    "urllib3>=2.3.0",  # requests 的底层 HTTP 库
+
+    # ============== Eel Web 框架链：被 auto-py-to-exe 依赖的 eel 带进来，与项目完全无关 ==============
+    "eel>=0.18.1",  # 用网页做桌面 GUI 的框架（本项目用 PySide6，用不到）
+    "bottle>=0.13.2",  # eel 内部的轻量 Web 服务器
+    "bottle-websocket>=0.2.9",  # bottle 的 WebSocket 扩展（eel 依赖）
+    "gevent>=24.11.1",  # 协程库（eel 依赖，用于 WebSocket 通信）
+    "gevent-websocket>=0.10.1",  # gevent 的 WebSocket 实现（bottle-websocket 依赖）
+    "greenlet>=3.1.1",  # 协程底层库（gevent 依赖）
+    "zope-event>=5.0",  # 事件机制库（gevent 依赖）
+    "zope-interface>=7.2",  # 接口声明库（gevent 依赖）
+    "cffi>=1.17.1",  # 调用 C 语言接口的库（gevent 依赖）
+    "pycparser>=2.22",  # C 语言解析器（cffi 依赖）
+    "future>=1.0.0",  # Python 2/3 兼容层（eel 依赖）
+    "pyparsing>=3.2.3",  # 解析器库（eel 依赖）
+    "typing-extensions>=4.13.0",  # 类型注解扩展（eel 依赖）
+
+    # ==================== 杂项 / 遗留：代码里没有任何地方使用 ====================
+    "importlib-metadata>=7.1.0",  # 读取已安装包的元数据（旧版打包工具依赖，已基本弃用）
+    "zipp>=3.21.0",  # 操作 zip 文件的库（importlib-metadata 的依赖）
+    "click>=8.1.7",  # 命令行工具库（疑似遗留，无代码使用）
+    "colorama>=0.4.6",  # Windows 终端彩色输出（click 的依赖，无代码使用）
+    "pip>=26.2.1",  # Python 包管理器（不应作为项目依赖，纯遗留）
+    "pywin32>=312",  # Windows API 的 Python 封装（程序未使用）
+    "pypiwin32>=223",  # pywin32 的旧别名（已废弃，只是依赖 pywin32）
 ]
 [project.scripts]
 eternity-library = "eternity_library:main"
