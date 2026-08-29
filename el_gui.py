@@ -8,7 +8,6 @@ from PySide6.QtCore import (
     QSize,
     QThread,
     Qt,
-    Signal,
 )
 from PySide6.QtWidgets import (
     QApplication,
