@@ -15,16 +15,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 项目定位
 
-- 功能方向类似 Calibre，但侧重点不同，只做本地电子书管理
-- **大概率不做**：联网检索图书基本信息、在线书城集成、任何需要网络请求的元数据获取
-- 部分 Calibre 的功能可能永远也不会添加，以实际需求为导向
+- 功能方向类似 Calibre，但侧重点不同，暂时只做本地电子书管理
+- 后续可能开发：联网检索图书基本信息、在线书城集成、任何需要网络请求的元数据获取
 
 ## Tech Stack
 
 - **GUI**: PySide6 (Qt6)
 - **Database**: SQLite3
 - **PDF**: PyMuPDF (fitz)
-- **Python**: 3.9+ (项目自带 venv)
+- **Python**: 3.12+ (项目自带venv)
 
 ## Architecture
 
@@ -42,9 +41,7 @@ pdf.py             — PDF 操作：路径获取、文字提取
 
 2. **DatabaseManager** (`database.py`): 核心数据层，使用 QObject 信号实现与 GUI 的解耦。`duplicate_book` 信号在发现重名书籍时触发，`add_book_result` 信号通知操作结果。数据库表 `books_information` 包含 book_id~introduction 共 18 个字段。
 
-3. **ScanBookFiles** (`books.py`): 扫描流程：选择目录 → os.walk 遍历 → 匹配扩展名（pdf/doc/docx/epub/txt）→ 写入数据库。错误处理区分 FileNotFoundError/NotADirectoryError/PermissionError。
-
-4. **Books 类体系**: `Books` 基类 → `PDFBooks`、`TxtBooks`、`EpubBooks` 三个子类，目前多为占位方法。
+3. **Books 类体系**: `Books` 基类 → `PDFBooks`、`TxtBooks`、`EpubBooks` 三个子类，目前多为占位方法。
 
 ### Qt 信号流
 
@@ -53,7 +50,7 @@ DatabaseManager 发出信号 → MainWindow 的槽函数处理：重复书籍弹
 ## Run
 
 ```bash
-# 使用项目自带 venv（Python 3.9）
+# 使用项目自带 venv（Python 3.12）
 source venv/Scripts/activate  # Windows Git Bash
 python el_gui.py
 ```
@@ -63,7 +60,7 @@ python el_gui.py
 - 所有 UI 文本使用中文（通过 QCoreApplication.translate 包装）
 - 数据库文件 `books_information.db` 自动创建在项目根目录
 - 书籍图标在 `images/icons/` 目录下
-- 项目有 venv（Python 3.9），另有 pyvenv.cfg 指向的外部环境
+- 项目有 venv（Python 3.12），另有 pyvenv.cfg 指向的外部环境
 - `exercise.py` 是 QPalette 调色板示例，与主项目无关
 
 ## UI Layout Plan
@@ -77,17 +74,6 @@ python el_gui.py
   - **封面模式**：QScrollArea 包裹网格布局，每本书用 QFrame 卡片展示（占位封面 + 书名 + 作者/类型），点击卡片响应
   - **列表模式**：QTableWidget 表格展示（复用现有实现）
 - 左右分区使用 **QSplitter** 实现，用户可拖动调整宽度
-
-### 关键控件选择
-
-| 用途 | 控件 | 说明 |
-|------|------|------|
-| 左右分区 | QSplitter | 用户可拖动分隔线 |
-| 右侧模式容器 | QStackedWidget | 封面/列表切换，轻量隐藏/显示 |
-| 封面滚动 | QScrollArea | 内容超出时自动滚动 |
-| 分类列表 | QListWidget | 左侧筛选选项 |
-| 书籍卡片 | QFrame + QVBoxLayout | 圆角卡片，hover 变色，点击触发 |
-
 
 ### 后续可扩展方向
 
