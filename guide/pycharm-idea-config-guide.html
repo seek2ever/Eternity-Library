@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<title>PyCharm 项目 .idea 目录配置文件详解</title>
+<style>
+body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; max-width: 860px; margin: 0 auto; padding: 20px; line-height: 1.7; background: #f8f9fa; color: #333; }
+h1 { border-bottom: 2px solid #4a9eff; padding-bottom: 8px; }
+h2 { color: #2c3e50; margin-top: 36px; border-left: 4px solid #4a9eff; padding-left: 10px; }
+h3 { color: #34495e; }
+code { background: #e8e8e8; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+.file-path { font-size: 15px; font-weight: bold; color: #4a9eff; margin: 24px 0 6px; }
+.note { background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; border-radius: 4px; margin: 16px 0; }
+.ok { background: #d4edda; border-left: 4px solid #28a745; padding: 12px 16px; border-radius: 4px; margin: 16px 0; }
+.warn { background: #ffeef0; border-left: 4px solid #d73a49; padding: 12px 16px; border-radius: 4px; margin: 16px 0; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; background: #fff; }
+th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; font-size: 14px; }
+th { background: #4a9eff; color: white; }
+tr:nth-child(even) { background: #f1f6fd; }
+svg { background: #fff; border: 1px solid #ddd; border-radius: 8px; margin: 12px 0; width: 100%; height: auto; }
+.fig-cap { text-align: center; color: #6a737d; font-size: 13px; margin: -6px 0 16px; }
+.mono { font-family: Consolas, 'Courier New', monospace; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; color: #fff; }
+.badge-git { background: #28a745; }
+.badge-ignore { background: #6a737d; }
+.badge-plugin { background: #6f42c1; }
+</style>
+</head>
+<body>
+
+<h1>📁 PyCharm 项目 .idea 目录配置文件详解</h1>
+
+<p>本文档以 <strong>Eternity-Library</strong> 和 <strong>PythonProject</strong> 两个项目为例,逐个讲解 PyCharm 项目中 <code>.idea</code> 目录下各个 <code>.xml</code> 文件(以及其他文件)的作用。文中还记录了本次排查并修复的「两个项目配置互相纠缠,导致 Claude Code 启动目录错误」的问题。</p>
+
+<h2>一、.idea 目录是什么</h2>
+
+<p><code>.idea</code> 是 <strong>IntelliJ 平台(PyCharm / WebStorm 等)</strong> 在打开一个文件夹作为「项目」时,自动生成的项目配置目录。它保存了这个项目在 PyCharm 中的全部元数据,包括:<strong>项目 SDK、模块结构、运行配置、版本控制映射、代码检查、编辑器 UI 状态</strong>等。删除它不会影响你的源代码,但 PyCharm 会丢失该项目的一切个性化配置(需要重新设置解释器、运行配置等)。</p>
+
+<svg viewBox="0 0 820 400" role="img" aria-label="目录结构">
+  <rect width="820" height="400" fill="#fff"/>
+  <text x="20" y="28" font-size="15" font-weight="bold" fill="#2c3e50">.idea 目录位于每个项目的根目录下</text>
+  <text x="20" y="66" font-size="15" font-weight="bold" fill="#333" class="mono">D:\PycharmProjects\　← 父目录(同时是多个 PyCharm 项目)</text>
+  <text x="44" y="96" font-size="15" fill="#333" class="mono">├─ Eternity-Library\　← 项目 A(电子图书馆)</text>
+  <text x="76" y="126" font-size="15" fill="#4a9eff" font-weight="bold" class="mono">│　 └─ .idea\　← PyCharm 为该项目生成的配置</text>
+  <text x="108" y="150" font-size="13" fill="#555" class="mono">│　     ├─ eternity-library.iml　(模块定义)</text>
+  <text x="108" y="174" font-size="13" fill="#555" class="mono">│　     ├─ modules.xml　(模块注册表)</text>
+  <text x="108" y="198" font-size="13" fill="#555" class="mono">│　     ├─ misc.xml / encodings.xml / vcs.xml …</text>
+  <text x="108" y="222" font-size="13" fill="#555" class="mono">│　     └─ workspace.xml　(工作区状态)</text>
+  <text x="44" y="252" font-size="15" fill="#333" class="mono">├─ PythonProject\　← 项目 B(另一个独立项目)</text>
+  <text x="76" y="282" font-size="15" fill="#4a9eff" font-weight="bold" class="mono">│　 └─ .idea\</text>
+  <text x="108" y="306" font-size="13" fill="#555" class="mono">│　     ├─ Python Project.iml</text>
+  <text x="108" y="330" font-size="13" fill="#555" class="mono">│　     └─ modules.xml / workspace.xml …</text>
+  <text x="44" y="360" font-size="15" fill="#333" class="mono">└─ 其他项目…</text>
+</svg>
+<div class="fig-cap">图 1:Eternity-Library 与 PythonProject 是<strong>兄弟目录</strong>,各有独立的 .idea 配置</div>
+
+<h2>二、几个通用概念</h2>
+
+<h3>1. XML 根节点</h3>
+<p>所有配置文件都以 <code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;</code> 开头,根节点都是 <code>&lt;project version="4"&gt;</code>(模块文件 <code>*.iml</code> 的根节点是 <code>&lt;module version="4"&gt;</code>)。一个「组件」用 <code>&lt;component name="组件名"&gt;</code> 表示,对应 PyCharm 的某一项功能。</p>
+
+<h3>2. 常用路径变量</h3>
+<table>
+  <tr><th>变量</th><th>含义</th></tr>
+  <tr><td class="mono">$PROJECT_DIR$</td><td>项目根目录(即 <code>.idea</code> 所在目录)</td></tr>
+  <tr><td class="mono">$MODULE_DIR$</td><td>当前模块所在目录(通常等于 <code>$PROJECT_DIR$</code>)</td></tr>
+  <tr><td class="mono">$USER_HOME$</td><td>用户主目录,如 <code>C:\Users\Wang</code></td></tr>
+  <tr><td class="mono">$APPLICATION_CONFIG_DIR$</td><td>PyCharm 的应用配置目录(存放全局设置、Scratches 等)</td></tr>
+</table>
+
+<p class="warn"><strong>关键点</strong>:配置中出现了 <code>$PROJECT_DIR$/../Eternity-Library</code> 这类路径,表示<strong>引用了本目录之外的其他目录</strong>。这是本次「项目纠缠」问题的根源。</p>
+
+<h2>三、.idea 文件分类总览</h2>
+
+<svg viewBox="0 0 820 340" role="img" aria-label="文件分类">
+  <rect width="820" height="340" fill="#fff"/>
+  <text x="20" y="28" font-size="15" font-weight="bold" fill="#2c3e50">.idea 内文件按功能分为三类</text>
+
+  <rect x="20" y="50" width="250" height="255" rx="8" fill="#e6ffed" stroke="#28a745"/>
+  <text x="36" y="76" font-size="14" font-weight="bold" fill="#1a7f37">① 核心项目配置</text>
+  <text x="36" y="98" font-size="12" fill="#333">这些定义了「项目是什么」,</text>
+  <text x="36" y="114" font-size="12" fill="#333">通常<strong>提交</strong>到版本控制:</text>
+  <text x="36" y="140" font-size="12" class="mono" fill="#333">· *.iml (模块定义)</text>
+  <text x="36" y="160" font-size="12" class="mono" fill="#333">· modules.xml</text>
+  <text x="36" y="180" font-size="12" class="mono" fill="#333">· misc.xml</text>
+  <text x="36" y="200" font-size="12" class="mono" fill="#333">· encodings.xml</text>
+  <text x="36" y="220" font-size="12" class="mono" fill="#333">· vcs.xml</text>
+  <text x="36" y="240" font-size="12" class="mono" fill="#333">· .name</text>
+  <text x="36" y="260" font-size="12" class="mono" fill="#333">· inspectionProfiles/</text>
+
+  <rect x="285" y="50" width="250" height="255" rx="8" fill="#ffeef0" stroke="#d73a49"/>
+  <text x="301" y="76" font-size="14" font-weight="bold" fill="#cb2431">② 工作区状态</text>
+  <text x="301" y="98" font-size="12" fill="#333">只与「当前打开的这个项目」</text>
+  <text x="301" y="114" font-size="12" fill="#333">的界面状态有关,通常<strong>忽略</strong>:</text>
+  <text x="301" y="140" font-size="12" class="mono" fill="#333">· workspace.xml</text>
+  <text x="301" y="160" font-size="12" class="mono" fill="#333">· shelf/ (本地搁置)</text>
+  <text x="301" y="180" font-size="12" class="mono" fill="#333">· .idea/copilot/chatSessions</text>
+  <text x="301" y="210" font-size="12" fill="#666">这些文件因人而异、经常变化,</text>
+  <text x="301" y="226" font-size="12" fill="#666">不适合提交,否则多人协作时</text>
+  <text x="301" y="242" font-size="12" fill="#666">会不断产生冲突。</text>
+
+  <rect x="550" y="50" width="250" height="255" rx="8" fill="#f1f6fd" stroke="#6f42c1"/>
+  <text x="566" y="76" font-size="14" font-weight="bold" fill="#6f42c1">③ 插件 / 第三方扩展</text>
+  <text x="566" y="98" font-size="12" fill="#333">由已安装的插件生成:</text>
+  <text x="566" y="124" font-size="12" class="mono" fill="#333">· externalDependencies.xml</text>
+  <text x="566" y="144" font-size="12" class="mono" fill="#333">· pyProjectModel.xml</text>
+  <text x="566" y="164" font-size="12" class="mono" fill="#333">· python-terminal.xml</text>
+  <text x="566" y="184" font-size="12" class="mono" fill="#333">· material_theme_project_new.xml</text>
+  <text x="566" y="204" font-size="12" class="mono" fill="#333">· MarsCodeWorkspaceAppSettings.xml</text>
+  <text x="566" y="224" font-size="12" class="mono" fill="#333">· dictionaries/ (拼写字典)</text>
+</svg>
+<div class="fig-cap">图 2:.idea 内文件的三类归属</div>
+
+<h2>四、核心配置文件逐个说明</h2>
+
+<p>以下文件在两个项目中都存在,作用相同,只是具体内容不同。</p>
+
+<div class="file-path">1. *.iml(如 <span class="mono">eternity-library.iml</span> / <span class="mono">Python Project.iml</span>)<span class="badge badge-git">提交</span></div>
+<p><strong>IntelliJ Module 文件</strong>,定义「模块」的结构,是 PyCharm 理解项目源码的最核心文件:</p>
+<ul>
+  <li><code>&lt;content&gt;</code> — 模块内容根(哪些目录属于本模块);<code>&lt;sourceFolder&gt;</code> 标记源码目录(如本项目 <code>src/</code>);<code>&lt;excludeFolder&gt;</code> 标记排除目录(如 <code>venv/</code>、<code>.venv/</code>)。</li>
+  <li><code>&lt;orderEntry type="jdk" jdkName="…"&gt;</code> — 模块使用的 Python 解释器。</li>
+  <li><code>&lt;orderEntry type="module" module-name="…"&gt;</code> — 模块间的依赖。<strong>本次修复中,PythonProject.iml 里出现了 <code>module-name="eternity-library"</code> 的依赖,这正是 PythonProject 错误地「挂靠」了 Eternity-Library 模块。</strong></li>
+</ul>
+<p>Eternity-Library 的 iml 带有 <code>external.system.id="pyproject.toml"</code>,表示该模块由 uv/PEP 621 的 <code>pyproject.toml</code> 管理,SDK 是 <code>uv (Eternity-Library)</code>。</p>
+
+<div class="file-path">2. modules.xml<span class="badge badge-git">提交</span></div>
+<p><strong>项目模块注册表</strong>,列出该项目包含的所有模块。正常情况下一个项目只有自己的 <code>*.iml</code>。但它允许引用<strong>其他目录</strong>中的 iml 文件(例如 <code>$PROJECT_DIR$/../PythonProject/.idea/Python Project.iml</code>),这会把另一个项目整个拉进当前项目——<strong>本次修复前 Eternity-Library 的 modules.xml 里就挂着 PythonProject、PyQt5 等多个外部项目的模块。</strong></p>
+
+<div class="file-path">3. misc.xml<span class="badge badge-git">提交</span></div>
+<p>项目级通用设置,常见组件:</p>
+<ul>
+  <li><code>ProjectRootManager</code> — 项目默认 SDK(<code>project-jdk-name</code>)。</li>
+  <li><code>Black</code> — Black 代码格式化插件使用哪个解释器(<code>sdkName</code>)。<strong>本次修复前,两个项目的 Black 解释器互相指向对方项目(PythonProject → Eternity-Library,Eternity-Library → PythonProject),已全部改回各自项目自己的解释器。</strong></li>
+</ul>
+
+<div class="file-path">4. encodings.xml<span class="badge badge-git">提交</span></div>
+<p>记录项目内<strong>非默认编码</strong>的文件的字符编码(如 GBK/GB2312),PyCharm 用它对文件进行读写。本次修复前,PythonProject 的 encodings.xml 里记录了 5 个指向 <code>../Eternity-Library/…</code> 的文件,说明用户曾在 PythonProject 项目里打开过 Eternity-Library 的文件,已清理。</p>
+
+<div class="file-path">5. vcs.xml<span class="badge badge-git">提交</span></div>
+<p><strong>版本控制仓库映射</strong>。正常只把项目根目录映射为一个 Git 仓库(<code>&lt;mapping directory="" vcs="Git"/&gt;</code>)。<strong>本次修复前,PythonProject 的 vcs.xml 额外映射了 <code>../Eternity-Library</code>,Eternity-Library 的 vcs.xml 额外映射了 <code>../PythonProject</code>,导致每个项目都能看到并操作对方的 Git 变更——已互相清理。</strong></p>
+
+<div class="file-path">6. workspace.xml<span class="badge badge-ignore">忽略</span></div>
+<p><strong>工作区状态</strong>,是最大的一个文件,记录随使用不断变化的内容,通常被 <code>.gitignore</code> 忽略、不提交。包含:</p>
+<ul>
+  <li><code>RunManager</code> — 运行/调试配置列表(本次清理了 PythonProject 里 3 个引用已不存在的 <code>PyQt5</code> 模块、且脚本指向 Eternity-Library 的失效配置)。</li>
+  <li><code>ChangeListManager</code> — Git 变更列表。</li>
+  <li><code>XDebuggerManager</code> — 断点。</li>
+  <li><code>Git.Settings</code>、<code>Vcs.Log.*</code> — Git 分支、提交历史窗口的 UI 状态。</li>
+  <li><code>TaskManager</code> — 本地提交记录(LOCAL-00001 等)。</li>
+  <li><code>ProjectViewState</code>、<code>PropertiesComponent</code>、<code>RecentsManager</code> 等 UI 状态。</li>
+</ul>
+<p class="note">注意:由于它被忽略,本次对它的清理是「本地生效」,不会进入 Git 提交记录。</p>
+
+<div class="file-path">7. .name<span class="badge badge-git">提交</span></div>
+<p>纯文本文件,存放<strong>项目的显示名称</strong>(注意:不是 XML)。PythonProject 里它原本被写成了 <code>maimemo_query.py</code>(一个文件的名称),已改回 <code>Python Project</code>。</p>
+
+<div class="file-path">8. inspectionProfiles / (目录)<span class="badge badge-git">提交</span></div>
+<p>存放代码检查(Inspection)的配置文件,定义哪些检查启用、级别如何。</p>
+
+<div class="file-path">9. .gitignore<span class="badge badge-git">提交</span></div>
+<p><code>.idea</code> 目录<strong>内部</strong>的忽略规则(由仓库作者维护,不是 PyCharm 自动生成)。例如两个项目的 .gitignore 都忽略 <code>/workspace.xml</code>、<code>/shelf/</code>。注意这是「.idea 目录被纳入 Git 时」用来排除不该提交的子项的。</p>
+
+<h2>五、Eternity-Library 特有的文件</h2>
+
+<table>
+  <tr><th>文件</th><th>归属</th><th>作用</th></tr>
+  <tr>
+    <td class="mono">externalDependencies.xml</td>
+    <td><span class="badge badge-plugin">插件</span></td>
+    <td>记录项目依赖的外部插件,如彩虹括号 <code>izhangzhihao.rainbow.brackets</code>。</td>
+  </tr>
+  <tr>
+    <td class="mono">pyProjectModel.xml</td>
+    <td><span class="badge badge-plugin">Python</span></td>
+    <td>Python 项目模型设置:<code>usePyprojectToml</code> 表示使用 <code>pyproject.toml</code> 管理依赖;是否显示配置通知。</td>
+  </tr>
+  <tr>
+    <td class="mono">python-terminal.xml</td>
+    <td><span class="badge badge-plugin">Python</span></td>
+    <td>PyCharm 终端对虚拟环境的处理:<code>virtualEnvActivate="false"</code> 表示打开终端时<strong>不自动激活</strong>虚拟环境。</td>
+  </tr>
+  <tr>
+    <td class="mono">material_theme_project_new.xml</td>
+    <td><span class="badge badge-plugin">插件</span></td>
+    <td>Material Theme(主题插件)的项目级配置。</td>
+  </tr>
+  <tr>
+    <td class="mono">MarsCodeWorkspaceAppSettings.xml</td>
+    <td><span class="badge badge-plugin">插件</span></td>
+    <td>MarsCode(豆包 AI 编程助手)插件的 workspace 设置,记录聊天面板路由、引导进度等。</td>
+  </tr>
+  <tr>
+    <td class="mono">dictionaries/</td>
+    <td><span class="badge badge-plugin">插件</span></td>
+    <td>自定义拼写检查词典,用户手动加入的单词(IDE 不再提示拼写错误)。</td>
+  </tr>
+</table>
+
+<h2>六、本次修复的问题</h2>
+
+<h3>1. 问题现象</h3>
+<p>用户打开的是 <strong>Eternity-Library</strong> 项目,但在终端执行 <code>claude</code> 启动 Claude Code 时,工作目录却落在了 <strong>PythonProject</strong>。</p>
+
+<div class="ok"><strong>直接原因</strong>:Claude Code 的启动目录 <strong>完全继承启动它的终端(Shell)的当前目录</strong>,与 PyCharm 当前打开哪个项目无关。执行 <code>claude</code> 的那个终端,<code>pwd</code> 停在 <code>D:\PycharmProjects\PythonProject</code>。</div>
+
+<h3>2. 深层原因:两个项目的配置互相纠缠</h3>
+
+<svg viewBox="0 0 820 430" role="img" aria-label="修复前的纠缠">
+  <rect width="820" height="430" fill="#fff"/>
+  <text x="20" y="28" font-size="15" font-weight="bold" fill="#d73a49">修复前:两个项目的 .idea 配置互相引用、纠缠不清</text>
+
+  <rect x="20" y="55" width="360" height="200" rx="8" fill="#ffeef0" stroke="#d73a49"/>
+  <text x="36" y="82" font-size="15" font-weight="bold" fill="#333">PythonProject 项目</text>
+  <text x="36" y="108" font-size="12" class="mono" fill="#555">Python Project.iml → 依赖 eternity-library 模块</text>
+  <text x="36" y="130" font-size="12" class="mono" fill="#555">misc.xml → Black SDK = Eternity-Library</text>
+  <text x="36" y="152" font-size="12" class="mono" fill="#555">vcs.xml → 额外映射 ../Eternity-Library</text>
+  <text x="36" y="174" font-size="12" class="mono" fill="#555">workspace.xml 运行配置 → 脚本指向 ../Eternity-Library</text>
+  <text x="36" y="196" font-size="12" class="mono" fill="#555">encodings.xml → 记录 ../Eternity-Library/*.py</text>
+  <text x="36" y="218" font-size="12" class="mono" fill="#555">VCS 日志/断点/变更列表 → 指向 Eternity-Library</text>
+
+  <rect x="440" y="55" width="360" height="200" rx="8" fill="#ffeef0" stroke="#d73a49"/>
+  <text x="456" y="82" font-size="15" font-weight="bold" fill="#333">Eternity-Library 项目</text>
+  <text x="456" y="108" font-size="12" class="mono" fill="#555">modules.xml → 引入 ../PythonProject/*.iml</text>
+  <text x="456" y="130" font-size="12" class="mono" fill="#555">misc.xml → Black SDK = PythonProject</text>
+  <text x="456" y="152" font-size="12" class="mono" fill="#555">vcs.xml → 额外映射 ../PythonProject</text>
+  <text x="456" y="174" font-size="12" class="mono" fill="#555">modules.xml → 还引入多个 PyQt5 外部项目</text>
+  <text x="456" y="196" font-size="12" class="mono" fill="#555">workspace.xml → 记录了 PythonProject 路径</text>
+
+  <line x1="380" y1="120" x2="440" y2="120" stroke="#d73a49" stroke-width="3" marker-end="url(#a1)"/>
+  <line x1="440" y1="175" x2="380" y2="175" stroke="#d73a49" stroke-width="3" marker-end="url(#a1)"/>
+  <text x="310" y="108" font-size="12" fill="#d73a49">iml / misc 依赖</text>
+  <text x="310" y="195" font-size="12" fill="#d73a49">modules / vcs 引用</text>
+
+  <defs>
+    <marker id="a1" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L9,3 L0,6 z" fill="#d73a49"/>
+    </marker>
+  </defs>
+
+  <text x="20" y="300" font-size="13" fill="#333">后果:Pycharm 中两个项目互相「看得见、管得着」对方 ——</text>
+  <text x="20" y="322" font-size="13" fill="#333">· 项目边界被混淆,用户误以为自己在另一个项目里;</text>
+  <text x="20" y="344" font-size="13" fill="#333">· 运行配置、断点、Git 日志、编码记录都出现了「越界」引用;</text>
+  <text x="20" y="366" font-size="13" fill="#333">· 再加上独立的终端里 cwd 停在 PythonProject,`claude` 便从 PythonProject 启动。</text>
+</svg>
+<div class="fig-cap">图 3:修复前两个项目的配置互相引用</div>
+
+<svg viewBox="0 0 820 210" role="img" aria-label="修复后独立">
+  <rect width="820" height="210" fill="#fff"/>
+  <text x="20" y="28" font-size="15" font-weight="bold" fill="#1a7f37">修复后:两个项目完全独立、互不引用</text>
+
+  <rect x="20" y="55" width="360" height="120" rx="8" fill="#e6ffed" stroke="#28a745"/>
+  <text x="36" y="82" font-size="15" font-weight="bold" fill="#333">PythonProject 项目</text>
+  <text x="36" y="110" font-size="13" class="mono" fill="#1a7f37">✓ 只引用自己的模块 / SDK / Git 仓库</text>
+  <text x="36" y="134" font-size="13" class="mono" fill="#1a7f37">✓ 运行配置只指向本项目文件</text>
+
+  <rect x="440" y="55" width="360" height="120" rx="8" fill="#e6ffed" stroke="#28a745"/>
+  <text x="456" y="82" font-size="15" font-weight="bold" fill="#333">Eternity-Library 项目</text>
+  <text x="456" y="110" font-size="13" class="mono" fill="#1a7f37">✓ 只引用自己的模块 / SDK / Git 仓库</text>
+  <text x="456" y="134" font-size="13" class="mono" fill="#1a7f37">✓ 清除了所有外部项目模块引用</text>
+
+  <text x="390" y="120" font-size="22" fill="#28a745" text-anchor="middle">✔</text>
+</svg>
+<div class="fig-cap">图 4:修复后两个项目互相独立</div>
+
+<h3>3. Claude Code 启动目录的原理</h3>
+
+<svg viewBox="0 0 820 240" role="img" aria-label="claude 启动目录原理">
+  <rect width="820" height="240" fill="#fff"/>
+  <text x="20" y="28" font-size="15" font-weight="bold" fill="#2c3e50">Claude Code 的工作目录 = 启动它的终端所在目录</text>
+
+  <rect x="30" y="55" width="180" height="60" rx="8" fill="#f1f6fd" stroke="#4a9eff"/>
+  <text x="120" y="80" font-size="13" fill="#333" text-anchor="middle">终端 Shell</text>
+  <text x="120" y="100" font-size="11" fill="#666" text-anchor="middle">pwd 决定一切</text>
+
+  <rect x="330" y="55" width="180" height="60" rx="8" fill="#f1f6fd" stroke="#4a9eff"/>
+  <text x="420" y="80" font-size="13" fill="#333" text-anchor="middle">执行 claude</text>
+  <text x="420" y="100" font-size="11" fill="#666" text-anchor="middle">不读取任何 PyCharm 配置</text>
+
+  <rect x="630" y="55" width="170" height="60" rx="8" fill="#e6ffed" stroke="#28a745"/>
+  <text x="715" y="80" font-size="13" fill="#1a7f37" text-anchor="middle">Claude Code 工作目录</text>
+  <text x="715" y="100" font-size="11" fill="#666" text-anchor="middle">= 终端 cwd</text>
+
+  <line x1="210" y1="85" x2="328" y2="85" stroke="#4a9eff" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="510" y1="85" x2="628" y2="85" stroke="#4a9eff" stroke-width="2" marker-end="url(#a2)"/>
+
+  <rect x="30" y="150" width="360" height="60" rx="8" fill="#ffeef0" stroke="#d73a49"/>
+  <text x="210" y="175" font-size="13" fill="#333" text-anchor="middle">终端在 PythonProject 启动 claude</text>
+  <text x="210" y="195" font-size="12" fill="#d73a49" text-anchor="middle">→ 工作目录 = D:\PycharmProjects\PythonProject (本次遇到的问题)</text>
+
+  <rect x="430" y="150" width="360" height="60" rx="8" fill="#e6ffed" stroke="#28a745"/>
+  <text x="610" y="175" font-size="13" fill="#333" text-anchor="middle">终端在 Eternity-Library 启动 claude</text>
+  <text x="610" y="195" font-size="12" fill="#1a7f37" text-anchor="middle">→ 工作目录 = D:\PycharmProjects\Eternity-Library (期望)</text>
+
+  <defs>
+    <marker id="a2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L9,3 L0,6 z" fill="#4a9eff"/>
+    </marker>
+  </defs>
+</svg>
+<div class="fig-cap">图 5:Claude Code 的工作目录由终端决定,与 PyCharm 无关</div>
+
+<h3>4. 本次实际修改的配置文件</h3>
+
+<table>
+  <tr><th>项目</th><th>文件</th><th>修改内容</th></tr>
+  <tr>
+    <td rowspan="6">PythonProject</td>
+    <td class="mono">Python Project.iml</td>
+    <td>移除 <code>module-name="eternity-library"</code> 模块依赖</td>
+  </tr>
+  <tr><td class="mono">misc.xml</td><td>Black 的 SDK 改回 <code>Python 3.9 (PythonProject)</code>,不再指向 Eternity-Library</td></tr>
+  <tr><td class="mono">encodings.xml</td><td>移除 5 条指向 <code>../Eternity-Library/*</code> 的编码记录</td></tr>
+  <tr><td class="mono">vcs.xml</td><td>移除 <code>../Eternity-Library</code> 的 Git 仓库映射</td></tr>
+  <tr><td class="mono">workspace.xml</td><td>删除 3 个引用失效 PyQt5 模块且指向 Eternity-Library 的运行配置;清理 VCS 日志、断点、变更列表、Git 分支记录、GitHub URL、最近目录等越界引用</td></tr>
+  <tr><td class="mono">.name</td><td>项目显示名从 <code>maimemo_query.py</code> 改为 <code>Python Project</code></td></tr>
+  <tr>
+    <td rowspan="5">Eternity-Library</td>
+    <td class="mono">modules.xml</td>
+    <td>移除对 PythonProject、PyQt5 等多个外部项目的模块引用,只保留自己的 <code>eternity-library.iml</code></td>
+  </tr>
+  <tr><td class="mono">misc.xml</td><td>Black 的 SDK 从 <code>Python 3.9 (PythonProject)</code> 改为项目自己的 <code>Python 3.9 (venv)</code></td></tr>
+  <tr><td class="mono">vcs.xml</td><td>移除 <code>../PythonProject</code> 的 Git 仓库映射</td></tr>
+  <tr><td class="mono">eternity-library.iml</td><td>移除 <code>Eternity-Library/venv</code> 嵌套残留的排除目录</td></tr>
+  <tr><td class="mono">workspace.xml</td><td>移除 Copilot 插件记录的 PythonProject 路径</td></tr>
+</table>
+
+<p class="note"><strong>提醒</strong>:
+<ul>
+  <li>修改配置后,<strong>重启 PyCharm</strong> 使其重新加载两个项目,生效才完整。</li>
+  <li>今后要启动 Claude Code 且工作在 Eternity-Library 时,先 <code>cd /d/PycharmProjects/Eternity-Library</code>,再执行 <code>claude</code>。</li>
+  <li>运行配置里如果还有引用不存在的模块(如旧的 PyQt5),在 PyCharm 的 Run 面板里重新选择/新建即可。</li>
+</ul>
+</p>
+
+</body>
+</html>
