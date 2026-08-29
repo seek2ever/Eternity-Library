@@ -36,7 +36,7 @@ class MyPushButton(QPushButton):
             # 启动拖动，使用Move动作（表示移动而非复制）
             drag.exec(Qt.MoveAction)
         else:
-            # 非左键交给父类默认处理（如点击行为）7
+            # 非左键交给父类默认处理（如点击行为）
             super().mousePressEvent(event)
 
 
