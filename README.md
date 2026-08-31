@@ -1,4 +1,4 @@
-The repo is used for learning.
+The repo is used for learning.  
 本仓库仅用于个人学习。
 
 将项目中的改动提交到本地仓库，同时推送到远程仓库中，每个文件分别提交commit（如果没有改动则不需要），提交作者中不要添加任何Co-Authored-By署名，commit内容使用中文撰写，类型前缀仍旧使用英文（例如docs: 修改readme.md内容）。
@@ -18,11 +18,7 @@ The repo is used for learning.
 见pyproject.toml
 ### Python版本：3.12
 ## TODO
-|          | 已经完成 |         正在进行          |                         即将开始                          |
-|:---------|:----:|:---------------------:|:-----------------------------------------------------:|
-| **非常重要** |  -   | 1.扫描文件  <br/>2.显示各项数据 | 1.阅读界面  <br/>2.统计阅读时长  <br/>3.自动扫描书籍文件  <br/>4.书籍文件编辑 |
-| **一般重要** | 任务D  |           -           |                     1.思维导图及笔记跳转原文                     |
-| **不太重要** | 任务G  |           -           |             1.阅读情况热力图  <br/>2.年度阅读报告生成与分享             |
+详见：https://github.com/users/seek2ever/projects/3
 
 ## 项目笔记  
 ### ScanBookFiles类中scan_book_files方法：
