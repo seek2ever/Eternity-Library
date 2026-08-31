@@ -1,3 +1,6 @@
+The repo is used for learning.
+本仓库仅用于个人学习。
+
 将项目中的改动提交到本地仓库，同时推送到远程仓库中，每个文件分别提交commit（如果没有改动则不需要），提交作者中不要添加任何Co-Authored-By署名，commit内容使用中文撰写，类型前缀仍旧使用英文（例如docs: 修改readme.md内容）。
 
 # Eternity-Library
