@@ -80,19 +80,62 @@ class MyFrame(QFrame):
             event.ignore()
 
     def dragMoveEvent(self, event):
+        """
+        处理拖拽移动事件，拖拽过程中重复判断拖拽的数据类型是否为文本类型。
+        :param event: QDragMoveEvent类的实例对象
+        :return: None
+        """
         if event.mimeData().hasText():
             event.acceptProposedAction()
         else:
             event.ignore()
 
     def dropEvent(self, event):
+        """
+        处理拖拽释放事件，当拖拽的按钮被释放时，找到按钮并计算新位置，随后更新按钮坐标。
+        :param event: QDropEvent类的实例对象
+        :return: None
+
+        这一步是最终落地动作：
+        1. 从拖拽的 MIME 数据中读取被拖动的按钮名称；
+        2. 在当前 frame 中通过 findChild() 找到对应的按钮对象；
+        3. 用 getattr() 读取拖动开始时记录的热点偏移量 _drag_hotspot；
+        4. 计算按钮应该落到的位置：鼠标当前位置 - hotspot；
+        5. 调用 move() 更新按钮坐标，并接受本次拖放动作。
+
+        这样做的意义是避免按钮在放下时“跳到鼠标左上角”，因为按钮本来是按住鼠标某一点拖动的，
+        所以需要保留按下时鼠标相对按钮左上角的偏移量（hotspot），以保持自然拖动效果。
+        """
+        # 1. 从拖拽数据中读取被拖动按钮的 objectName
+        # 在 mousePressEvent 中，drag.setMimeData(mime)，而 mime.setText(self.objectName())
+        # 所以这里拿到的就是被拖动按钮的唯一标识，例如 "pushbutton_1234"
         name = event.mimeData().text()
+
+        # 2. 在当前 frame 里根据类型和 objectName 查找对应的按钮对象
+        # findChild(QPushButton, name) 的含义是：
+        #   - 在 self 的子控件中查找一个 QPushButton
+        #   - 且它的 objectName 等于 name
+        # 这样就可以拿到“真正被拖拽的那个按钮”实例。
         widget = self.findChild(QPushButton, name)
+
         if widget:
+            # 3. 获取拖动开始时记录的偏移量 hotspot
+            # 在 mousePressEvent 中，self._drag_hotspot = event.position().toPoint()
+            # 这里用 getattr(widget, "_drag_hotspot", QPoint(0, 0)) 的意思是：
+            #   - 如果 widget 有 _drag_hotspot 属性，则取它；
+            #   - 否则返回默认值 QPoint(0, 0)
+            # 因为拖动开始时我们记录了鼠标按下位置相对于按钮左上角的偏移值。
             hotspot = getattr(widget, "_drag_hotspot", QPoint(0, 0))
+
+            # 4. 计算按钮的新位置
+            # 事件中鼠标当前位置是 event.position().toPoint()
+            # 按钮左上角应该放在 "鼠标位置 - hotspot"，这样拖拽时不会发生跳动。
             widget.move(event.position().toPoint() - hotspot)
+
+            # 5. 通知 Qt：本次拖放操作已处理完成
             event.acceptProposedAction()
         else:
+            # 目标控件中没有找到对应按钮，说明不是当前拖放对象，忽略事件
             event.ignore()
 
 
