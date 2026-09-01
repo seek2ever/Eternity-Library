@@ -1,0 +1,41 @@
+sequenceDiagram
+    autonumber
+    participant UI as MainWindow (主线程)
+    participant T as QThread (工作线程)
+    participant W as BookQueryWorker
+    participant DB as SQLite 数据库
+    participant M as CoverCardModel
+    participant V as QListView / CoverCardDelegate
+
+    UI->>UI: __init__() 初始化
+    UI->>T: new QThread()
+    UI->>W: new BookQueryWorker(db_name)
+    UI->>W: moveToThread(T)
+    UI->>W: connect books_ready -> _on_books_loaded
+    UI->>W: connect query_error -> _on_query_error
+    UI->>W: connect trigger_fetch -> fetch_all_books
+    UI->>T: start()
+
+    UI->>UI: refresh_view()
+    alt 缓存有效
+        UI->>UI: _on_books_loaded(cache)
+        UI->>M: set_books(cache)
+        UI->>V: View 自动刷新
+    else 缓存过期
+        UI->>W: trigger_fetch.emit()
+        W-->>T: QueuedConnection 排队到工作线程
+        T->>W: fetch_all_books()
+        W->>DB: SELECT * FROM books_information
+        DB-->>W: 返回 books 列表
+        W->>W: 组装 result
+        W-->>UI: books_ready.emit(result)
+        UI->>UI: _on_books_loaded(books)
+        UI->>M: set_books(books)
+        UI->>V: 刷新封面卡片
+    end
+
+    Note over UI,V: 主线程只更新 Model/View，数据库查询不阻塞 UI
+
+    UI->>T: closeEvent() -> quit()
+    T-->>UI: 线程退出
+    UI->>DB: db.close()
