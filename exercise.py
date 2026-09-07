@@ -1,50 +1,31 @@
-import sys
-
-from PySide6.QtWidgets import (
-    QApplication,
-    QWidget,
-    QFileDialog,
-    QMenu,
-)
-from PySide6.QtGui import (
-    QPixmap,
-    QPainter,
-)
+import threading
+import time
 
 
-class MyWindow(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("My Application")
-        self.setAcceptDrops(True)
-        self.resize(600, 400)
-        self.pixmap = QPixmap()
-
-    def contextMenuEvent(self, event, /):
-        contextMenu = QMenu(self)
-        contextMenu.addAction("Open").triggered.connect(self.actionOpen_triggered)
-        contextMenu.addSeparator()
-        contextMenu.addAction("Exit").triggered.connect(self.close)
-        contextMenu.exec(event.globalPos())
-
-    def paintEvent(self, event, /):
-        painter = QPainter(self)
-        painter.drawPixmap(self.rect(), self.pixmap)
-
-    def mouseDoubleClickEvent(self, event, /):
-        self.actionOpen_triggered()
-
-    def actionOpen_triggered(self):
-        fileDialog = QFileDialog(self)
-        fileDialog.setNameFilter("Images (*.png *.jpg *.jpeg)")
-        fileDialog.setFileMode(QFileDialog.FileMode.ExistingFile)
-        if fileDialog.exec():
-            self.pixmap.load(fileDialog.selectedFiles()[0])
-            self.update()
+def cpu_heavy_work(n):
+	"""模拟 CPU 密集计算。"""
+	total = 0
+	for i in range(n):
+		total += i * i
+	return total
 
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MyWindow()
-    window.show()
-    sys.exit(app.exec())
+N = 50_000_000
+
+# 单线程：约 3.2 秒
+start = time.perf_counter()
+cpu_heavy_work(N)
+cpu_heavy_work(N)
+print(f"单线程耗时: {time.perf_counter() - start:.2f} 秒")
+# 输出：单线程耗时：6.41 秒
+
+# 多线程：约 6.4 秒（没有并行加速，GIL 限制了执行）
+start = time.perf_counter()
+t1 = threading.Thread(target=cpu_heavy_work, args=(N,))
+t2 = threading.Thread(target=cpu_heavy_work, args=(N,))
+t1.start()
+t2.start()
+t1.join()
+t2.join()
+print(f"多线程耗时: {time.perf_counter() - start:.2f} 秒")
+# 输出：多线程耗时：6.38 秒（几乎没有加速）
