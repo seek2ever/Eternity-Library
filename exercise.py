@@ -9,7 +9,6 @@ def cpu_heavy_work(n):
 		total += i * i
 	return total
 
-
 N = 50_000_000
 
 # 单线程：约 3.2 秒
