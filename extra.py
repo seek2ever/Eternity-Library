@@ -42,4 +42,4 @@ class MyWindow(QWidget):
 
     def right_btn(self, pos):
         self.global_label.setText(f"{pos.x()}, {pos.y()}")
-print("hello word!")
+print("你好!")
