@@ -42,10 +42,4 @@ class MyWindow(QWidget):
 
     def right_btn(self, pos):
         self.global_label.setText(f"{pos.x()}, {pos.y()}")
-
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MyWindow()
-    window.show()
-    sys.exit(app.exec())
+print("hello word!")
