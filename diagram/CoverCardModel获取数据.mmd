@@ -1,0 +1,33 @@
+sequenceDiagram
+    participant UI as MainWindow 主线程
+    participant Cache as _books_cache
+    participant Worker as BookQueryWorker 工作线程
+    participant DB as books_information.db
+    participant Model as CoverCardModel
+    participant View as QListView
+
+    UI->>UI: refresh_view()
+    UI->>Cache: 检查缓存时间
+
+    alt 缓存有效
+        Cache-->>UI: 返回缓存数据
+        UI->>Model: set_books(cached_books)
+    else 缓存不存在或已过期
+        UI->>Worker: trigger_fetch.emit()
+        Worker->>DB: 创建独立 SQLite 连接
+        Worker->>DB: SELECT * FROM books_information
+        DB-->>Worker: fetchall() 返回 list[tuple]
+        Worker->>UI: books_ready.emit(result)
+        UI->>Cache: 保存查询结果和时间戳
+        UI->>Model: set_books(result)
+    end
+
+    Model->>Model: beginResetModel()
+    Model->>Model: 将元组转换成字典
+    Model->>Model: 保存到 _books
+    Model->>Model: endResetModel()
+    Model-->>View: 数据已重置
+    View->>Model: rowCount()
+    Model-->>View: 返回书籍数量
+    View->>Model: data(index, role)
+    Model-->>View: 返回书名、作者、类型等数据
