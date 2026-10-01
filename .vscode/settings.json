@@ -1,4 +1,4 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+    "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
     "todo-tree.ripgrep.ripgrep": "C:\\Users\\Wang\\AppData\\Local\\Microsoft\\WinGet\\Links\\rg.exe"
 }
