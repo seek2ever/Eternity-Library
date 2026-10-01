@@ -276,7 +276,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(16, 16, 16, 16)
 
         toolbar = QHBoxLayout()     # 列表视图最上方的标签行
-        mode_label = QLabel(self._translate("Table View", "列表模式"))
+        mode_label = QLabel(self._translate("Table View", "表格模式"))
         mode_label.setStyleSheet("font-size: 13pt; font-weight: bold;")
         toolbar.addWidget(mode_label)
         toolbar.addStretch()
@@ -300,16 +300,16 @@ class MainWindow(QMainWindow):
         return container
 
     def _toggle_view_mode(self) -> None:
-        """在封面模式和列表模式之间切换"""
+        """在封面模式和表格模式之间切换"""
         current = self.right_stack.currentIndex()
         if current == 0:
-            # 当前是封面模式，切换到列表模式
+            # 当前是封面模式，切换到表格模式
             self.right_stack.setCurrentIndex(1)
             self.show_book_info()
             self.toggle_view_btn.setText(self._translate("Views", "切换到封面视图"))
-            self.statusbar.showMessage(self._translate("Views", "已切换到列表视图"))
+            self.statusbar.showMessage(self._translate("Views", "已切换到表格视图"))
         elif current == 1:
-            # 当前是列表模式，切换到封面模式
+            # 当前是表格模式，切换到封面模式
             self.right_stack.setCurrentIndex(0)
             self.refresh_view()
             self.toggle_view_btn.setText(self._translate("Views", "切换到列表视图"))
