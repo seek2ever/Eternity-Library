@@ -23,17 +23,14 @@ class CoverCardModel(QAbstractListModel):
         super().__init__(parent)
         self._books = []  # list[dict]，每个 dict 是一本书的关键字段
 
-    # ── QAbstractListModel 必须实现的 2 个方法 ──
-
     def rowCount(self, parent=QModelIndex()):
         """返回总条目数。View 靠这个值计算滚动条范围。"""
         return len(self._books)
 
     def data(self, index, role=Qt.DisplayRole):
-        """View 请求第 index.row() 条数据的 role 角色的值。
-        View 会在需要绘制某个条目时调用这个方法。
-        例如：View 说"给我第 42 个条目的 DisplayRole"，
-        就返回书名字符串。
+        """
+        View 请求第 index.row() 条数据的 role 角色的值。View 会在需要绘制某个条目时调用这个方法。
+        例如：View 说"给我第 42 个条目的 DisplayRole"，就返回书名字符串。
         """
         if not index.isValid():
             return None
