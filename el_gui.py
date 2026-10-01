@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QStackedWidget,
     QStatusBar,
+    QTableView,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -36,6 +37,7 @@ from database import (
 from utils import Tips
 from cover_model import CoverCardModel
 from cover_delegate import CoverCardDelegate
+from table_model import BookTableModel
 
 
 class MainWindow(QMainWindow):
@@ -68,6 +70,7 @@ class MainWindow(QMainWindow):
         # 右侧视图组件
         self.book_table: Optional[QTableWidget] = None
         self.cover_list_view: QListView
+        self.table_view: QTableView
 
         # 窗口组件
         self.splitter: Optional[QSplitter] = None
@@ -264,40 +267,17 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.cover_list_view)
         return container
 
+    def _create_table_view(self) -> QWidget:
+        self.table_model = BookTableModel()
+        self.table_view = QTableView()
+        self.table_view.setModel(self.table_model)
+        return None
+
     def _on_cover_card_clicked(self, index) -> None:
         """点击封面卡片"""
         book = self.cover_model.get_book(index.row())
         if book:
             self.statusbar.showMessage(f"{book['name']}")
-
-    def _create_table_view(self) -> QWidget:
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(16, 16, 16, 16)
-
-        toolbar = QHBoxLayout()     # 列表视图最上方的标签行
-        mode_label = QLabel(self._translate("Table View", "表格模式"))
-        mode_label.setStyleSheet("font-size: 13pt; font-weight: bold;")
-        toolbar.addWidget(mode_label)
-        toolbar.addStretch()
-        layout.addLayout(toolbar)
-
-        # 添加"书籍列表"表格
-        self.book_table = QTableWidget()
-        self.book_table.setObjectName("book_table")
-        # 获取数据库中各列的标题信息，用于创建列
-        books_data: list = self.db.get_all_books()
-        if books_data:
-            self.book_table.setRowCount(len(books_data))
-            self.book_table.setColumnCount(len(books_data[0]))
-        else:
-            self.book_table.setRowCount(0)
-            self.book_table.setColumnCount(0)
-        self.book_table.setHorizontalHeaderLabels(self.db.transfer_title_type())  # 设置列标题
-        self.book_table.clicked.connect(self.show_book_info)
-
-        layout.addWidget(self.book_table)
-        return container
 
     def _toggle_view_mode(self) -> None:
         """在封面模式和表格模式之间切换"""
