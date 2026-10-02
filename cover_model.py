@@ -26,7 +26,7 @@ class CoverCardModel(QAbstractListModel):
     def rowCount(self, parent=QModelIndex()):
         """返回总条目数。View 靠这个值计算滚动条范围。"""
         return len(self._books)
-
+    
     def data(self, index, role=Qt.DisplayRole):
         """
         View 请求第 index.row() 条数据的 role 角色的值。View 会在需要绘制某个条目时调用这个方法。
@@ -56,8 +56,6 @@ class CoverCardModel(QAbstractListModel):
             return book.get("cover_path")
         return None
 
-    # ── 数据操作 ──
-
     def set_books(self, books):
         """批量替换全部数据（数据库查询完成后调用）。
         使用 beginResetModel/endResetModel 通知 View：
@@ -77,14 +75,14 @@ class CoverCardModel(QAbstractListModel):
         ]
         self.endResetModel()
 
-    def clear(self):
-        """清空全部数据"""
-        self.beginResetModel()
-        self._books.clear()
-        self.endResetModel()
-
     def get_book(self, row):
         """通过行号获取原始 dict，供外部使用（如点击卡片打开详情）"""
         if 0 <= row < len(self._books):
             return self._books[row]
         return None
+
+    def clear(self):
+        """清空全部数据"""
+        self.beginResetModel()
+        self._books.clear()
+        self.endResetModel()
