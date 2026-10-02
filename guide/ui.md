@@ -103,9 +103,9 @@ def setup_ui(self):
     # 3. 创建右侧视图容器（QStackedWidget）
     self.right_stack = QStackedWidget()
     self.cover_view = self._create_cover_view()  # 封面模式
-    self.list_view = self._create_table_view()  # 列表模式（复用现有表格）
+    self.form_table_view = self._create_table_view()  # 列表模式（复用现有表格）
     self.right_stack.addWidget(self.cover_view)  # index 0
-    self.right_stack.addWidget(self.list_view)  # index 1
+    self.right_stack.addWidget(self.form_table_view)  # index 1
     self.right_stack.setCurrentIndex(0)  # 默认显示封面模式
 
     # 4. 将左右组件加入 QSplitter
