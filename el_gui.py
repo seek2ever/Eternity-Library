@@ -58,7 +58,6 @@ class MainWindow(QMainWindow):
         self.toggle_view_btn: Optional[QPushButton] = None
         self.category_list: Optional[QListWidget] = None
         self.scan_button: Optional[QPushButton] = None
-        self.show_button: Optional[QPushButton] = None
         self.clear_button: Optional[QPushButton] = None
         self.close_button: Optional[QPushButton] = None
 
@@ -120,7 +119,7 @@ class MainWindow(QMainWindow):
         # 创建右侧视图容器
         self.right_stack = QStackedWidget()
         cover_view_widget = self._create_cover_view()      # 封面视图，索引为0
-        table_view_widget = self._create_table_view()      # 列表视图，索引为1
+        table_view_widget = self._create_table_view()      # 表格视图，索引为1
         self.right_stack.addWidget(cover_view_widget)
         self.right_stack.addWidget(table_view_widget)
         # 设置默认视图（当前默认为封面视图），索引顺序与添加的顺序一致
@@ -161,7 +160,7 @@ class MainWindow(QMainWindow):
         view_label.setAlignment(Qt.AlignCenter)
         view_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
 
-        self.toggle_view_btn = QPushButton("切换到表格视图")
+        self.toggle_view_btn = QPushButton("切换视图")
         self.toggle_view_btn.setFixedHeight(36)
         self.toggle_view_btn.clicked.connect(self._toggle_view_mode)
 
@@ -207,9 +206,8 @@ class MainWindow(QMainWindow):
         self.scan_button.setFixedHeight(36)
         self.scan_button.clicked.connect(self.scan_books)
 
-        self.show_button = QPushButton(self._translate("Show books information.", "显示书籍信息"))
-        self.show_button.setFixedHeight(36)
-        self.show_button.clicked.connect(self.show_book_info)
+        # self.show_button = QPushButton(self._translate("Show books information.", "显示书籍信息"))
+        # self.show_button.setFixedHeight(36)
 
         self.clear_button = QPushButton(self._translate("Not show", "取消显示"))
         self.clear_button.setFixedHeight(36)
@@ -221,12 +219,24 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(action_label)
         layout.addWidget(self.scan_button)
-        layout.addWidget(self.show_button)
+        # layout.addWidget(self.show_button)
         layout.addWidget(self.clear_button)
         layout.addWidget(self.close_button)
         # 弹簧：将内容推到顶部
         layout.addStretch()
         return panel
+
+    def _create_table_view(self) -> QTableView:
+        self.table_view = QTableView()
+        self.table_view.setModel(self.table_model)
+        # TODO: 暂时使用使用默认的显示和编辑行为，后续再完善自定义delegate以便支持更复杂的显示和编辑行为
+        # self.table_view.setItemDelegate(self.table_delegate)
+
+        # TODO: 调整列宽和行高的时机不对， 目前在切换到表格视图时，数据还未加载完成，导致列宽和行高调整不正确
+        self.table_view.resizeColumnsToContents()
+        self.table_view.resizeRowsToContents()
+        self.table_view.setShowGrid(True)
+        return self.table_view
 
     def _create_cover_view(self) -> QWidget:
         """创建封面视图 —— QListView + Delegate 虚拟化绘制"""
@@ -266,18 +276,6 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.cover_card_view)
         return container
 
-    def _create_table_view(self) -> QTableView:
-        self.table_view = QTableView()
-        self.table_view.setModel(self.table_model)
-        # TODO: 暂时使用使用默认的显示和编辑行为，后续再完善自定义delegate以便支持更复杂的显示和编辑行为
-        # self.table_view.setItemDelegate(self.table_delegate)
-
-        # TODO: 调整列宽和行高的时机不对， 目前在切换到表格视图时，数据还未加载完成，导致列宽和行高调整不正确
-        self.table_view.resizeColumnsToContents()
-        self.table_view.resizeRowsToContents()
-        self.table_view.setShowGrid(True)
-        return self.table_view
-
     def _on_cover_card_clicked(self, index) -> None:
         """点击封面卡片"""
         book = self.cover_model.get_book(index.row())
@@ -291,15 +289,43 @@ class MainWindow(QMainWindow):
             # 当前是封面模式，切换到表格模式
             self.right_stack.setCurrentIndex(1)
             # TODO：切换到表格视图后，如何自动刷新表格的数据（是否可以直接调用实例属性self.table_view？）
-            self.show_book_info()
-            self.toggle_view_btn.setText(self._translate("Views", "切换到表格视图"))
+            self.refresh_view()
+            self.toggle_view_btn.setText(self._translate("Views", "切换到封面视图"))
             self.statusbar.showMessage(self._translate("Views", "已切换到表格视图"))
         elif current == 1:
             # 当前是表格模式，切换到封面模式
             self.right_stack.setCurrentIndex(0)
             self.refresh_view()
-            self.toggle_view_btn.setText(self._translate("Views", "切换到封面视图"))
+            self.toggle_view_btn.setText(self._translate("Views", "切换到表格视图"))
             self.statusbar.showMessage(self._translate("Views", "已切换到封面视图"))
+
+    def refresh_view(self) -> None:
+        """触发后台查询，若存在有效缓存则直接使用"""
+        # 缓存有效（30秒内），直接渲染，不走数据库
+        if self._books_cache is not None and (time.time() - self._cache_timestamp) < 30:
+            self._on_books_loaded(self._books_cache)
+            return
+
+        # 缓存过期或不存在 → 触发后台线程查询
+        self._book_worker.trigger_fetch.emit()
+
+    @staticmethod
+    def _on_query_error(self, error_msg: str) -> None:
+        """查询出错时的处理"""
+        Tips.information_msg(f"数据库查询失败：{error_msg}")
+
+    def _on_books_loaded(self, books: list) -> None:
+        """收到后台查询结果（在主线程执行），直接传递给Model，View会自动刷新"""
+        # TODO：如果数据库返回的数据为空，是否需要清空View的显示？目前没有处理
+        if not books:
+            return
+        self._books_cache = books
+        self._cache_timestamp = time.time()
+        self.cover_model.set_books(books)
+        self.table_model.set_data(books)
+        self.statusbar.showMessage(
+            self._translate("Views", f"已刷新，共 {len(books)} 本书")
+        )
 
     def _on_category_changed(self, row: int) -> None:
         """左侧分类选择变化时触发"""
@@ -321,34 +347,6 @@ class MainWindow(QMainWindow):
         # 刷新封面和列表视图
         self.refresh_view()
 
-    def refresh_view(self) -> None:
-        """触发后台查询，若存在有效缓存则直接使用"""
-        # 缓存有效（30秒内），直接渲染，不走数据库
-        if self._books_cache is not None and (time.time() - self._cache_timestamp) < 30:
-            self._on_books_loaded(self._books_cache)
-            return
-
-        # 缓存过期或不存在 → 触发后台线程查询
-        self._book_worker.trigger_fetch.emit()
-
-    def _on_books_loaded(self, books: list) -> None:
-        """收到后台查询结果（在主线程执行），直接传递给Model，View会自动刷新"""
-        # TODO：如果数据库返回的数据为空，是否需要清空View的显示？目前没有处理
-        if not books:
-            return
-        self._books_cache = books
-        self._cache_timestamp = time.time()
-        self.cover_model.set_books(books)
-        self.table_model.set_data(books)
-        self.statusbar.showMessage(
-            self._translate("Views", f"已刷新，共 {len(books)} 本书")
-        )
-
-    @staticmethod
-    def _on_query_error(self, error_msg: str) -> None:
-        """查询出错时的处理"""
-        Tips.information_msg(f"数据库查询失败：{error_msg}")
-
     @staticmethod
     def scan_books(self) -> None:
         """
@@ -357,29 +355,6 @@ class MainWindow(QMainWindow):
         """
         scan_dialog = ScanBookFiles()
         scan_dialog.select_directory()
-
-    def show_book_info(self) -> None:
-        """获取书籍信息并展示"""
-        # try:
-        #     book_db: list = self.db.get_all_books()
-        #     # 清空列表中现有的数据
-        #     self.book_table.clearContents()
-        #     # 如果没有找到相关书籍信息，则弹出提示框
-        #     if not book_db:
-        #         Tips.information_msg("书籍索引信息为空。")
-        #         return
-        #     # 如果找到相关书籍信息，则展示在列表控件中
-        #     else:
-        #         for row, book_row in enumerate(book_db):
-        #             for col, book_data in enumerate(book_row):
-        #                 item = QTableWidgetItem(str(book_data))
-        #                 self.book_table.setItem(row, col, item)
-        #
-        #         self.book_table.resizeRowsToContents()          # 调整行高
-        #         self.book_table.resizeColumnsToContents()       # 调整列宽
-        #         self.book_table.setAlternatingRowColors(True)   # 隔行交替颜色
-        # except Exception as e:
-        #     Tips.information_msg(f"获取书籍信息时发生错误：{e}")
 
     def handle_duplicate_book(self, book_name) -> None:
         """
@@ -415,7 +390,6 @@ class MainWindow(QMainWindow):
         """显示添加结果"""
         if success:
             Tips.information_msg(message)
-            self.show_book_info()
             self.refresh_view()
             self.statusbar.showMessage(self._translate(
                 "success",
