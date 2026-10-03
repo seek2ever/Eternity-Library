@@ -1,5 +1,1 @@
-test = None
-if test:
-	print("test is not empty")
-else:
-	print("test is empty")
+raw_data = [{'book_id': '书籍ID'}, {'book_name': '书籍名称'}, {'book_path': '书籍路径'}, {'add_time': '添加时间'}, {'author': '作者'}, {'nationality': '国籍'}, {'translator': '译者'}, {'publisher': '出版社'}, {'publication_date': '出版日期'}, {'level': '书籍等级'}, {'read_status': '阅读状态'}, {'book_type': '书籍类型'}, {'isbn': 'ISBN'}, {'pages': '页数'}, {'read_progress': '阅读进度'}, {'read_time': '阅读时间'}, {'read_date': '阅读日期'}, {'read_link': '阅读链接'}, {'introduction': '简介'}]
