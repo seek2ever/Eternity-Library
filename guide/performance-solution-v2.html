@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>封面视图性能优化方案 v2 —— 异步查询 + 渐进式渲染 + 缓存</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --card-bg: #ffffff;
+    --text: #2c3e50;
+    --text-secondary: #5a6c7d;
+    --border: #e1e4e8;
+    --accent: #2980b9;
+    --accent-light: #eaf2f8;
+    --code-bg: #f6f8fa;
+    --warning-bg: #fef9e7;
+    --success-bg: #eafaf1;
+    --diff-add-bg: #e6ffec;
+    --diff-del-bg: #ffebe9;
+    --tag-thread: #e74c3c;
+    --tag-sql: #8e44ad;
+    --tag-qt: #2980b9;
+    --tag-perf: #d35400;
+    --tag-cache: #27ae60;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.8;
+    padding: 2rem 1rem;
+  }
+  .container { max-width: 1000px; margin: 0 auto; }
+
+  .hero {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color: #fff;
+    padding: 3rem 2.5rem;
+    border-radius: 12px;
+    margin-bottom: 2.5rem;
+  }
+  .hero h1 { font-size: 2rem; margin-bottom: 0.6rem; }
+  .hero .subtitle { color: #bdc3c7; font-size: 1.05rem; }
+  .hero .badge-row { margin-top: 1.2rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .badge {
+    display: inline-block; padding: 0.2rem 0.7rem; border-radius: 4px;
+    font-size: 0.8rem; font-weight: bold; color: #fff;
+  }
+  .badge-thread { background: var(--tag-thread); }
+  .badge-sql    { background: var(--tag-sql); }
+  .badge-qt     { background: var(--tag-qt); }
+  .badge-perf   { background: var(--tag-perf); }
+  .badge-cache  { background: var(--tag-cache); }
+
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 2rem 2.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .card h2 {
+    font-size: 1.35rem; margin-bottom: 1rem; padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--accent-light); color: var(--accent);
+  }
+  .card h3 {
+    font-size: 1.1rem; margin: 2rem 0 0.8rem; color: #34495e;
+    border-left: 3px solid var(--accent); padding-left: 0.6rem;
+  }
+  .card h3:first-of-type { margin-top: 0; }
+  .card p { margin-bottom: 1rem; color: var(--text-secondary); }
+  .card ul, .card ol { margin: 0.5rem 0 1rem 1.5rem; color: var(--text-secondary); }
+  .card li { margin-bottom: 0.3rem; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0 1.5rem; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.7rem 1rem; border: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafbfc; }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem 1.5rem;
+    overflow-x: auto;
+    font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", Consolas, monospace;
+    font-size: 0.86rem;
+    line-height: 1.6;
+    margin: 1rem 0 1.5rem;
+  }
+  code {
+    background: var(--code-bg); padding: 0.15rem 0.4rem; border-radius: 3px;
+    font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", Consolas, monospace;
+    font-size: 0.88em;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  .callout {
+    border-left: 4px solid; padding: 0.8rem 1.2rem; margin: 1.2rem 0;
+    border-radius: 0 6px 6px 0; font-size: 0.93rem;
+  }
+  .callout-warning { background: var(--warning-bg); border-color: #f39c12; }
+  .callout-info    { background: var(--accent-light); border-color: var(--accent); }
+  .callout-success { background: var(--success-bg); border-color: #27ae60; }
+
+  /* diff block */
+  .diff-add { background: var(--diff-add-bg); display: block; }
+  .diff-del { background: var(--diff-del-bg); display: block; }
+  .diff-context { display: block; }
+
+  .flow {
+    display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    flex-wrap: wrap; padding: 1.5rem; margin: 1.2rem 0;
+    background: var(--code-bg); border-radius: 8px; font-size: 0.88rem;
+  }
+  .flow-box {
+    background: #fff; border: 1.5px solid var(--accent);
+    border-radius: 6px; padding: 0.4rem 0.9rem; white-space: nowrap;
+  }
+  .flow-box.danger { border-color: var(--tag-thread); background: #fdedec; }
+  .flow-box.worker { border-color: #8e44ad; background: #f4ecf7; }
+  .flow-box.safe   { border-color: #27ae60; background: #eafaf1; }
+  .flow-arrow { font-size: 1.2rem; color: #95a5a6; }
+
+  .step {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; background: var(--accent); color: #fff;
+    border-radius: 50%; font-weight: bold; font-size: 0.85rem; margin-right: 0.4rem;
+    flex-shrink: 0;
+  }
+
+  .file-tag {
+    display: inline-block;
+    background: #34495e; color: #fff;
+    padding: 0.15rem 0.6rem; border-radius: 4px;
+    font-size: 0.82rem; font-weight: bold; margin-right: 0.3rem;
+  }
+  .file-tag.py { background: #3572A5; }
+  .file-tag.html { background: #e34c26; }
+
+  @media (max-width: 768px) {
+    .hero { padding: 2rem 1.5rem; }
+    .card { padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<!-- ===== Hero ===== -->
+<div class="hero">
+  <h1>封面视图性能优化方案 v2</h1>
+  <p class="subtitle">异步查询 · 渐进式渲染 · 缓存 —— 两个文件完成全部改造</p>
+  <div class="badge-row">
+    <span class="badge badge-thread">QThread + moveToThread</span>
+    <span class="badge badge-sql">SQLite 独立连接</span>
+    <span class="badge badge-perf">渐进式渲染 8张/批</span>
+    <span class="badge badge-cache">5秒内存缓存</span>
+  </div>
+</div>
+
+<!-- ===== 1. 问题回顾 ===== -->
+<div class="card">
+  <h2>1. 当前问题</h2>
+
+  <table>
+    <tr><th>问题</th><th>位置</th><th>原因</th><th>影响</th></tr>
+    <tr>
+      <td>① 数据库查询阻塞 UI</td>
+      <td><code>el_gui.py:382</code> refresh_cover_view()</td>
+      <td>在主线程同步调用 <code>db.get_all_books()</code></td>
+      <td>查询期间界面冻结 50~200ms</td>
+    </tr>
+    <tr>
+      <td>② 批量创建控件卡顿</td>
+      <td><code>el_gui.py:391-406</code> 循环创建 QFrame</td>
+      <td>100 本书 = 500+ Widget 一次性创建，事件循环无机会处理重绘</td>
+      <td>界面完全卡死数百毫秒到秒级</td>
+    </tr>
+    <tr>
+      <td>③ 重复查询浪费资源</td>
+      <td>每次切换视图 / 每次分类筛选</td>
+      <td>无缓存机制，每次都走 SQL</td>
+      <td>不必要的磁盘 I/O</td>
+    </tr>
+  </table>
+
+  <div class="callout callout-info">
+    <strong>改造目标：</strong>只修改两个 .py 文件（不新建任何文件），解决以上三个问题。
+  </div>
+</div>
+
+<!-- ===== 2. 方案总览 ===== -->
+<div class="card">
+  <h2>2. 方案总览</h2>
+
+  <table>
+    <tr><th>措施</th><th>文件</th><th>解决哪个问题</th><th>技术</th></tr>
+    <tr>
+      <td>A. BookQueryWorker</td>
+      <td><span class="file-tag py">database.py</span></td>
+      <td>① SQL 阻塞主线程</td>
+      <td>QObject + moveToThread，工作线程内创建独立 sqlite3 连接</td>
+    </tr>
+    <tr>
+      <td>B. 渐进式渲染</td>
+      <td><span class="file-tag py">el_gui.py</span></td>
+      <td>② 控件创建卡顿</td>
+      <td>QTimer 分批创建，8张/批，16ms 间隔，让出事件循环</td>
+    </tr>
+    <tr>
+      <td>C. 结果缓存</td>
+      <td><span class="file-tag py">el_gui.py</span></td>
+      <td>③ 重复查询</td>
+      <td>内存缓存 + 时间戳，5 秒内直接复用</td>
+    </tr>
+  </table>
+
+  <div class="flow">
+    <div class="flow-box safe">refresh_cover_view()<br>检查缓存</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box worker">缓存过期 → 触发 Worker<br>在工作线程执行 SQL</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box safe">books_ready 信号<br>回到主线程</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box safe">_render_cards_progressive()<br>分批创建卡片（每批 8 张）</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box safe">缓存结果<br>下次 5 秒内直接复用</div>
+  </div>
+
+  <div class="callout callout-success">
+    <strong>改动清单：</strong>仅修改 <code>database.py</code>（新增 BookQueryWorker 类，约 35 行）和 <code>el_gui.py</code>（新增/修改约 90 行）。不新建文件。
+  </div>
+</div>
+
+<!-- ===== 3. database.py 完整改动 ===== -->
+<div class="card">
+  <h2>3. database.py 改动 —— 新增 BookQueryWorker 类</h2>
+
+  <h3>为什么放在 database.py 而不是新建文件？</h3>
+  <ul>
+    <li>BookQueryWorker 是纯数据库操作层，与 DatabaseManager 共享 <code>db_name</code>，属于同一职责域</li>
+    <li>新建 <code>book_worker.py</code> 会导致模块碎片化——这个类只有 35 行</li>
+    <li>以后需要按类型/状态/作者查询时，在这个类中增加对应方法即可，职责内聚</li>
+  </ul>
+
+  <h3>完整代码（追加到 database.py 末尾，<code>if __name__ == '__main__'</code> 之前）</h3>
+
+<pre><code>class BookQueryWorker(QObject):
+    """在后台线程中执行数据库查询，避免阻塞 UI 主线程
+
+    关键设计：
+    - __init__ 只接收 db_name（字符串），不接收连接/游标对象
+    - 每次查询在自己的线程内创建独立 sqlite3 连接，查完即关
+    - 这是 SQLite 线程安全的基本要求：连接不能跨线程共享
+    """
+    books_ready = Signal(list)    # 查询成功，携带书籍列表
+    query_error = Signal(str)     # 查询失败，携带错误信息
+
+    def __init__(self, db_name: str):
+        """
+        :param db_name: 数据库文件名（如 'books_information.db'）
+        """
+        super().__init__()
+        self.db_name = db_name
+
+    def fetch_all_books(self):
+        """查询全部书籍（在工作线程中执行）"""
+        import sqlite3
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM books_information")
+            books = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            self.books_ready.emit(books)
+        except Exception as e:
+            self.query_error.emit(str(e))
+
+    def fetch_books_by_type(self, book_type: str):
+        """按类型查询（预留，待后续接入分类筛选功能）"""
+        import sqlite3
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM books_information WHERE book_type=?", (book_type,))
+            books = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            self.books_ready.emit(books)
+        except Exception as e:
+            self.query_error.emit(str(e))
+
+    def fetch_books_by_status(self, status: str):
+        """按阅读状态查询（预留）"""
+        import sqlite3
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM books_information WHERE read_status=?", (status,))
+            books = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            self.books_ready.emit(books)
+        except Exception as e:
+            self.query_error.emit(str(e))
+
+    def fetch_books_by_author(self, author: str):
+        """按作者查询（预留）"""
+        import sqlite3
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM books_information WHERE author=?", (author,))
+            books = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            self.books_ready.emit(books)
+        except Exception as e:
+            self.query_error.emit(str(e))
+</code></pre>
+
+  <div class="callout callout-warning">
+    <strong>注意：</strong>每次查询都新建 <code>sqlite3.connect()</code>，查完立即 <code>close()</code>。<strong>不能</strong>在 __init__ 中创建连接然后复用——SQLite 连接对象不是线程安全的，跨线程使用会导致不可预测的崩溃。
+  </div>
+  <div class="callout callout-info">
+    <strong>代码位置：</strong>追加在 <code>DatabaseManager</code> 类定义之后、<code>if __name__ == '__main__'</code> 之前。两个类共享同一个 <code>sqlite3</code> 导入。
+  </div>
+</div>
+
+<!-- ===== 4. el_gui.py 完整改动 ===== -->
+<div class="card">
+  <h2>4. el_gui.py 改动 —— 完整详细说明</h2>
+
+  <p>el_gui.py 的改动分布在 <strong>5 个位置</strong>，下面逐一说明。每个位置标注了在当前代码中的插入点。</p>
+
+  <!-- 4.1 导入 -->
+  <h3>4.1 修改导入语句 <span style="font-weight:normal;color:#6c757d;">（文件头部 ~第37行）</span></h3>
+
+  <p>在现有导入基础上增加 <code>QTimer</code> 和 <code>QMetaObject</code>，同时从 database 导入新增的 <code>BookQueryWorker</code>：</p>
+
+<pre><code>from PySide6.QtCore import (
+    QCoreApplication,
+    Qt,
+    QMetaObject,       # 新增：跨线程方法调用
+    QThread,            # 新增：后台工作线程
+    QTimer,             # 新增：渐进式渲染调度
+    Signal,
+)
+
+# ... 其他导入不变 ...
+
+from utils import Tips
+from books import ScanBookFiles
+from database import DatabaseManager, BookQueryWorker   # 修改：追加 BookQueryWorker
+</code></pre>
+
+  <!-- 4.2 __init__ 方法 -->
+  <h3>4.2 修改 __init__ 方法 <span style="font-weight:normal;color:#6c757d;">（第41~73行）</span></h3>
+
+  <p>在属性声明区域追加缓存和线程相关属性，在 <code>self.setup_ui()</code> 之前调用线程初始化：</p>
+
+<pre><code>class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.db = DatabaseManager()
+        self.db.duplicate_book.connect(self.handle_duplicate_book)
+        self.db.add_book_result.connect(self.show_add_result)
+
+        # ===== 新增：后台线程 + 缓存初始化 =====
+        self._setup_book_worker()
+
+        # 声明所有将在子方法中创建的实例属性
+        # ... (以下所有属性声明保持不变) ...
+        self.left_panel: Optional[QWidget] = None
+        # ...
+
+        self.setup_ui()
+</code></pre>
+
+  <!-- 4.3 _setup_book_worker -->
+  <h3>4.3 新增方法：_setup_book_worker() <span style="font-weight:normal;color:#6c757d;">（插入到 __init__ 和 setup_ui 之间）</span></h3>
+
+  <p>这是线程初始化的核心方法，负责创建工作线程、移动 Worker、连接信号、准备缓存：</p>
+
+<pre><code>def _setup_book_worker(self):
+    """初始化后台查询线程、缓存变量"""
+
+    # --- 缓存 ---
+    self._books_cache = None         # 缓存最近一次查询结果
+    self._cache_timestamp = 0        # 缓存创建时间 (time.time())
+
+    # --- 工作线程 ---
+    self._query_thread = QThread()
+
+    # 创建 Worker（传入数据库文件名，不传连接对象）
+    self._book_worker = BookQueryWorker(self.db.db_name)
+
+    # 把 Worker 移到工作线程（此后 Worker 的所有槽函数在工作线程执行）
+    self._book_worker.moveToThread(self._query_thread)
+
+    # 连接信号：Worker 查询完成 → 在主线程处理结果
+    self._book_worker.books_ready.connect(self._on_books_loaded)
+    self._book_worker.query_error.connect(self._on_query_error)
+
+    # 启动线程（进入事件循环，等待 invokeMethod 触发任务）
+    self._query_thread.start()
+</code></pre>
+
+  <div class="callout callout-info">
+    <strong>moveToThread 原理：</strong>Worker 对象被"移动"到工作线程后，所有通过 <code>invokeMethod</code>（QueuedConnection）调用的方法都在工作线程执行。但信号发出后，槽函数在接收者（MainWindow）所在的线程（即主线程）执行——这正是我们需要的：SQL 查询在工作线程，UI 更新在主线程。
+  </div>
+
+  <!-- 4.4 改造 refresh_cover_view -->
+  <h3>4.4 改造 refresh_cover_view() —— 异步查询 + 缓存 <span style="font-weight:normal;color:#6c757d;">（替换原第380~406行）</span></h3>
+
+  <p><strong>修改前：</strong></p>
+<pre><code>def refresh_cover_view(self) -> None:
+    """从数据库读取数据，刷新封面网格"""
+    books = self.db.get_all_books()      # ← 同步调用，阻塞 UI
+    if not books:
+        return
+    self._clear_layout(self.cover_grid_layout)
+    # ... 循环创建卡片，一次性完成 ...
+</code></pre>
+
+  <p><strong>修改后：</strong></p>
+<pre><code>def refresh_cover_view(self) -> None:
+    """触发后台查询，若有有效缓存则直接使用"""
+    import time
+
+    # 缓存有效（5 秒内），直接渲染，不走数据库
+    if self._books_cache is not None \
+       and (time.time() - self._cache_timestamp) &lt; 5:
+        self._on_books_loaded(self._books_cache)
+        return
+
+    # 缓存过期或不存在 → 触发后台线程查询
+    QMetaObject.invokeMethod(
+        self._book_worker,
+        "fetch_all_books",
+        Qt.QueuedConnection     # 确保在工作线程的事件循环中执行
+    )
+</code></pre>
+
+  <div class="callout callout-warning">
+    <strong>为什么用 QMetaObject.invokeMethod 而不是直接调用？</strong><br>
+    直接调用 <code>self._book_worker.fetch_all_books()</code> 会在<strong>主线程</strong>执行——因为调用者（MainWindow）在主线程。必须通过 invokeMethod + QueuedConnection 将调用"排队"到工作线程的事件循环中，才能实现真正的异步。
+  </div>
+
+  <!-- 4.5 _on_books_loaded -->
+  <h3>4.5 新增方法：_on_books_loaded() —— 缓存 + 触发渐进式渲染 <span style="font-weight:normal;color:#6c757d;">（插入到 refresh_cover_view 之后）</span></h3>
+
+<pre><code>def _on_books_loaded(self, books: list):
+    """收到后台查询结果（在主线程执行），缓存结果并启动渐进式渲染"""
+    import time
+
+    if not books:
+        return
+
+    # 更新缓存
+    self._books_cache = books
+    self._cache_timestamp = time.time()
+
+    # 清除旧卡片
+    self._clear_layout(self.cover_grid_layout)
+
+    # 启动渐进式渲染
+    self._render_cards_progressive(books)
+
+def _on_query_error(self, error_msg: str):
+    """查询出错时的处理"""
+    Tips.information_msg(f"数据库查询失败：{error_msg}")
+</code></pre>
+
+  <!-- 4.6 渐进式渲染 -->
+  <h3>4.6 新增方法：_render_cards_progressive() + _render_next_batch() <span style="font-weight:normal;color:#6c757d;">（插入到 _on_books_loaded 之后）</span></h3>
+
+  <p>核心思路：<strong>每批创建 8 张卡片 → 用 QTimer.singleShot 延迟 16ms → 创建下一批</strong>。16ms 的间隔让 Qt 事件循环有机会处理用户输入、重绘界面，从而避免"假死"。</p>
+
+<pre><code># 渐进式渲染配置
+BATCH_SIZE = 8          # 每批创建的卡片数
+BATCH_INTERVAL = 16     # 批次间隔 (ms)，约 60fps 一帧
+
+
+def _render_cards_progressive(self, books: list):
+    """初始化渐进式渲染状态，启动第一批"""
+    self._pending_books = books
+    self._pending_index = 0
+    self._col_index = 0
+    self._cols = 4               # 每行卡片数
+
+    # 0ms 后立即执行第一批（在事件循环空闲时）
+    QTimer.singleShot(0, self._render_next_batch)
+
+
+def _render_next_batch(self):
+    """创建下一批卡片（由 QTimer 回调，在主线程执行）"""
+    books = self._pending_books
+    cols = self._cols
+
+    for _ in range(BATCH_SIZE):
+        if self._pending_index >= len(books):
+            # 全部渲染完成，清理临时状态
+            self._pending_books = None
+            self.statusbar.showMessage(
+                self._translate("Views", f"封面视图已刷新，共 {len(books)} 本书")
+            )
+            return
+
+        book = books[self._pending_index]
+
+        # 提取书籍字段（索引对照数据库表结构）
+        book_name = book[1] or "未知"
+        author = book[4] or "未知"      # 修复：原代码误用索引 3
+        book_type = book[11] or "未知"
+
+        # 每 cols 本新建一水平行
+        if self._col_index % cols == 0:
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(16)
+            self.cover_grid_layout.addLayout(row_layout)
+
+        # 创建卡片并加入当前行
+        card = self._create_book_card(book_name, author, book_type)
+        # 获取当前行的最后一个布局（即刚加的那个行布局）
+        item = self.cover_grid_layout.itemAt(
+            self.cover_grid_layout.count() - 1
+        )
+        if item and item.layout():
+            item.layout().addWidget(card)
+
+        self._pending_index += 1
+        self._col_index += 1
+
+    # 本批完成，延迟 BATCH_INTERVAL ms 后调度下一批
+    QTimer.singleShot(BATCH_INTERVAL, self._render_next_batch)
+</code></pre>
+
+  <div class="callout callout-info">
+    <strong>效果对比：</strong>
+    <table style="margin:0.5rem 0;">
+      <tr><th>场景</th><th>改造前</th><th>改造后</th></tr>
+      <tr><td>100 本书</td><td>~1200ms 完全冻结</td><td>每次 16ms 创建 8 张，界面始终响应</td></tr>
+      <tr><td>用户感知</td><td>"程序卡死了"</td><td>"卡片快速逐批出现，很流畅"</td></tr>
+      <tr><td>交互能力</td><td>卡顿期间无法操作</td><td>渲染过程中可滚动、可点击切换</td></tr>
+    </table>
+  </div>
+
+  <!-- 4.7 closeEvent -->
+  <h3>4.7 新增 closeEvent() —— 安全清理线程 <span style="font-weight:normal;color:#6c757d;">（插入到 MainWindow 类末尾、_translate 之前）</span></h3>
+
+<pre><code>def closeEvent(self, event):
+    """窗口关闭时安全退出后台线程"""
+    self._query_thread.quit()      # 退出线程的事件循环
+    self._query_thread.wait(3000)  # 等待线程结束（最多 3 秒）
+    self.db.close()                # 关闭数据库连接
+    event.accept()
+</code></pre>
+
+  <div class="callout callout-warning">
+    <strong>为什么 quit() 之后必须 wait()？</strong><br>
+    如果只 quit() 不 wait()，线程可能还在运行就被强制终止，此时若持有锁或正在写文件会导致数据损坏。wait() 会阻塞直到线程完全退出（最多等待 3 秒超时保护）。
+  </div>
+</div>
+
+<!-- ===== 5. 当前存在的额外问题修复 ===== -->
+<div class="card">
+  <h2>5. 顺便修复：当前代码中的一个小 bug</h2>
+
+  <p>当前 <code>_create_book_card()</code> 中的字段索引有误。对照数据库表结构字段列表：</p>
+
+  <table>
+    <tr><th>索引</th><th>字段名</th><th>中文名</th></tr>
+    <tr><td>0</td><td>book_id</td><td>书籍ID</td></tr>
+    <tr><td>1</td><td>book_name</td><td>书籍名称</td></tr>
+    <tr><td>2</td><td>book_path</td><td>书籍路径</td></tr>
+    <tr><td>3</td><td>add_time</td><td>添加时间</td></tr>
+    <tr><td><strong>4</strong></td><td><strong>author</strong></td><td><strong>作者</strong></td></tr>
+    <tr><td>5</td><td>nationality</td><td>国籍</td></tr>
+    <tr><td>6</td><td>translator</td><td>译者</td></tr>
+    <tr><td>7</td><td>publisher</td><td>出版社</td></tr>
+    <tr><td>8</td><td>publication_date</td><td>出版日期</td></tr>
+    <tr><td>9</td><td>level</td><td>书籍等级</td></tr>
+    <tr><td>10</td><td>read_status</td><td>阅读状态</td></tr>
+    <tr><td><strong>11</strong></td><td><strong>book_type</strong></td><td><strong>书籍类型</strong></td></tr>
+    <tr><td>12</td><td>isbn</td><td>ISBN</td></tr>
+    <tr><td>...</td><td>...</td><td>...</td></tr>
+  </table>
+
+  <p>当前 <code>refresh_cover_view()</code> 中取 <code>author = book[3]</code>，但索引 3 是 <code>add_time</code>（添加时间），正确的作者字段在索引 <strong>4</strong>。此 bug 已在渐进式渲染代码中修复。</p>
+</div>
+
+<!-- ===== 6. 数据流全景 ===== -->
+<div class="card">
+  <h2>6. 完整数据流（端到端）</h2>
+
+  <div class="flow">
+    <div class="flow-box">① 用户点击<br>"切换到封面视图"</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box">② _toggle_view_mode()<br>调用 refresh_cover_view()</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box safe">③ 检查缓存<br>5 秒内？</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box worker">④ invokeMethod<br>→ Worker.fetch_all_books()<br>在工作线程创建连接、执行 SQL</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box safe">⑤ 发出 books_ready 信号<br>（自动切换回主线程）</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box safe">⑥ _on_books_loaded()<br>缓存结果 + 清除旧卡片</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box safe">⑦ _render_next_batch()<br>每 16ms 创建 8 张<br>直到全部完成</div>
+  </div>
+
+  <p style="margin-top:1.5rem;">其中步骤④在工作线程执行（不阻塞 UI），步骤③⑤⑥⑦都在主线程执行（安全操作 UI）。</p>
+</div>
+
+<!-- ===== 7. 对比旧方案 ===== -->
+<div class="card">
+  <h2>7. 与旧方案（v1）的对比</h2>
+
+  <table>
+    <tr><th>方面</th><th>旧方案 v1</th><th>新方案 v2</th></tr>
+    <tr>
+      <td>文件数</td>
+      <td>3 个文件（新建 book_worker.py）</td>
+      <td>2 个文件（只改现有文件）</td>
+    </tr>
+    <tr>
+      <td>BookQueryWorker 位置</td>
+      <td>独立文件 book_worker.py</td>
+      <td>database.py 内，与 DatabaseManager 同文件</td>
+    </tr>
+    <tr>
+      <td>缓存机制</td>
+      <td>可选（"锦上添花"）</td>
+      <td>内置在 refresh_cover_view 中，5 秒有效</td>
+    </tr>
+    <tr>
+      <td>查询方法</td>
+      <td>仅 fetch_all_books</td>
+      <td>fetch_all_books + 按类型/状态/作者（预留）</td>
+    </tr>
+    <tr>
+      <td>错误处理</td>
+      <td>有信号但无连接</td>
+      <td>_on_query_error 弹窗通知用户</td>
+    </tr>
+    <tr>
+      <td>字段索引bug</td>
+      <td>沿用 book[3] 取作者（错误）</td>
+      <td>修正为 book[4] 取作者</td>
+    </tr>
+    <tr>
+      <td>clear_layout 时机</td>
+      <td>在 _on_books_loaded 中</td>
+      <td>在 _on_books_loaded 中（一致）</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ===== 8. 实施步骤 ===== -->
+<div class="card">
+  <h2>8. 实施步骤</h2>
+
+  <table>
+    <tr><th>#</th><th>文件</th><th>操作</th><th>内容</th></tr>
+    <tr>
+      <td>1</td>
+      <td><code>database.py</code></td>
+      <td>在 DatabaseManager 类之后追加</td>
+      <td>BookQueryWorker 类（约 60 行，含 4 个查询方法）</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><code>el_gui.py</code></td>
+      <td>修改导入区</td>
+      <td>加入 QTimer, QMetaObject, QThread, BookQueryWorker</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><code>el_gui.py</code></td>
+      <td>__init__ 中添加一行调用</td>
+      <td><code>self._setup_book_worker()</code> 在 setup_ui 之前</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><code>el_gui.py</code></td>
+      <td>新增方法</td>
+      <td>_setup_book_worker() — 初始化线程+缓存</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><code>el_gui.py</code></td>
+      <td>替换方法</td>
+      <td>refresh_cover_view() — 异步查询+缓存检测</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><code>el_gui.py</code></td>
+      <td>新增方法</td>
+      <td>_on_books_loaded() + _on_query_error()</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td><code>el_gui.py</code></td>
+      <td>新增方法</td>
+      <td>_render_cards_progressive() + _render_next_batch()</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td><code>el_gui.py</code></td>
+      <td>新增方法</td>
+      <td>closeEvent() — 安全清理线程</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td>—</td>
+      <td>测试验证</td>
+      <td>启动程序，切换封面视图，确认流畅无卡顿</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ===== 9. 测试 ===== -->
+<div class="card">
+  <h2>9. 测试验证方法</h2>
+
+  <ol>
+    <li>确保数据库中有数据（可通过"扫描文件"添加 50+ 本书，或用 SQLite 工具直接插入测试数据）</li>
+    <li>启动程序</li>
+    <li>反复点击"切换到封面视图" / "切换到列表视图"按钮</li>
+    <li><strong>验证点：</strong>
+      <ul>
+        <li>按钮点击后状态栏立即响应（不等待数据库查询完成）</li>
+        <li>卡片分批出现（不是一次性全部跳出），每批约 8 张</li>
+        <li>卡片渲染过程中可以滚动、可以再次点击切换按钮（不"假死"）</li>
+        <li>5 秒内反复切换不触发数据库查询（观察是否秒开）</li>
+        <li>关闭窗口无报错、无残留进程</li>
+      </ul>
+    </li>
+  </ol>
+</div>
+
+<!-- ===== 10. 常见问题 ===== -->
+<div class="card">
+  <h2>10. 常见问题</h2>
+
+  <h3>Q1: 为什么不能用 Python 的 threading.Thread？</h3>
+  <p>可以用，但 Qt 的 QThread + moveToThread 提供了信号槽的跨线程自动排队机制。当 Worker 在工作线程发出 <code>books_ready</code> 信号时，Qt 会自动将槽函数 <code>_on_books_loaded</code> 的调用"排队"到主线程，无需手动加锁。用 threading.Thread 的话你需要自己把结果安全地传回主线程。</p>
+
+  <h3>Q2: 工作线程查询和主线程写入会冲突吗？</h3>
+  <p>每个查询都创建独立的 sqlite3 连接，SQLite 默认允许多个连接同时读。但如果有并发写入（扫描添加书籍），建议开启 WAL 模式：在 <code>DatabaseManager.create_table()</code> 中加一行 <code>self.cursor.execute("PRAGMA journal_mode=WAL")</code>。以当前的写入频率（手动触发）来说，不开 WAL 也基本安全。</p>
+
+  <h3>Q3: 缓存 5 秒够吗？需要可配置吗？</h3>
+  <p>5 秒是一个合理的起点：覆盖了"用户看完封面点回列表又立刻点回封面"的典型场景，又不会让缓存过期时间过长导致数据不一致。后续可以把这个值提取为 <code>CACHE_TTL = 5</code> 放到类常量中方便调整。</p>
+
+  <h3>Q4: 如果书籍数量非常大（500+），渐进式渲染还会卡吗？</h3>
+  <p>初始渲染不卡（因为有分批间隔），但 500+ 个 QFrame 全部创建后，在 QScrollArea 中滚动时 Qt 需要计算布局和重绘可见区域，可能有轻微掉帧。Qt 的 QScrollArea 默认只绘制可见控件，所以实际压力不大。如果确实有性能问题，后续可考虑 QListView + 自定义 Delegate 的虚拟化方案。</p>
+
+  <h3>Q5: closeEvent 中 wait() 阻塞会导致窗口关闭变慢吗？</h3>
+  <p>设置了 3 秒超时，大多数情况下线程在几毫秒内就能退出。3 秒是兜底保护，防止极端情况下无限等待。</p>
+</div>
+
+<!-- ===== Footer ===== -->
+<div style="text-align:center; color:#95a5a6; font-size:0.85rem; padding:2rem 0;">
+  <p>Eternity Library 项目 · 性能优化方案 v2 · 2026-05-17</p>
+  <p>仅修改 database.py + el_gui.py，不新建文件</p>
+</div>
+
+</div>
+</body>
+</html>
