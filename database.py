@@ -47,44 +47,37 @@ class DatabaseManager(QObject):
         self.connection.commit()
 
     def column_titles(self) -> list:
-        """
-        获取列的标题信息
-        """
+        """获取列的标题信息"""
         titles = self.cursor.execute("PRAGMA table_info(books_information)").fetchall()
-        translations = [
-            {titles[0]: '书籍ID'},
-            {titles[1]: '书籍名称'},
-            {titles[2]: '书籍路径'},
-            {titles[3]: '添加时间'},
-            {titles[4]: '作者'},
-            {titles[5]: '国籍'},
-            {titles[6]: '译者'},
-            {titles[7]: '出版社'},
-            {titles[8]: '出版日期'},
-            {titles[9]: '书籍等级'},
-            {titles[10]: '阅读状态'},
-            {titles[11]: '书籍类型'},
-            {titles[12]: 'ISBN'},
-            {titles[13]: '页数'},
-            {titles[14]: '阅读进度'},
-            {titles[15]: '阅读时间'},
-            {titles[16]: '阅读日期'},
-            {titles[17]: '阅读链接'},
-            {titles[18]: '简介'}
-        ]
         return titles
 
     def column_titles_translation(self):
-        """
-        获取列的标题信息并翻译
-        """
+        """获取列的标题信息并翻译"""
         # TODO: translations内容采用键值对考虑是否比元组形式更好？
-        titles = self.column_titles()
-
-    def transfer_title_type(self) -> list:
-        """获取并提取标题列信息中的“标题”，用于设置显示在控件中的表格各列标题"""
-        titles = self.column_titles()
-        return [title[1] for title in titles]
+        raw_titles = self.column_titles()
+        header = [title[1] for title in raw_titles]
+        # translations = [
+        #     {header[0]: '书籍ID'},
+        #     {header[1]: '书籍名称'},
+        #     {header[2]: '书籍路径'},
+        #     {header[3]: '添加时间'},
+        #     {header[4]: '作者'},
+        #     {header[5]: '国籍'},
+        #     {header[6]: '译者'},
+        #     {header[7]: '出版社'},
+        #     {header[8]: '出版日期'},
+        #     {header[9]: '书籍等级'},
+        #     {header[10]: '阅读状态'},
+        #     {header[11]: '书籍类型'},
+        #     {header[12]: 'ISBN'},
+        #     {header[13]: '页数'},
+        #     {header[14]: '阅读进度'},
+        #     {header[15]: '阅读时间'},
+        #     {header[16]: '阅读日期'},
+        #     {header[17]: '阅读链接'},
+        #     {header[18]: '简介'}
+        # ]
+        return header
 
     def add_column(self, table_name, column_name, column_type='TEXT'):
         """
@@ -332,8 +325,12 @@ class BookQueryWorker(QObject):
         super().__init__()
         self.db_name = db_name
 
-    def _execute_query(self, sql: str, params: tuple = ()):
-        """在工作线程中执行查询，创建独立连接，查完即关"""
+    def _execute_query(self, sql: str, params: tuple = ()) -> None:
+        """
+        在工作线程中执行查询，创建独立连接，查完即关。
+        查询结果为列表，每个元素是一个元组（包含书籍的名称、作者、路径等信息），
+        由Qt信号books_ready或query_error传递至主线程对应的方法中。
+        """
         conn = sqlite3.connect(self.db_name)
         try:
             cursor = conn.cursor()
@@ -372,9 +369,6 @@ class BookQueryWorker(QObject):
 
 if __name__ == '__main__':
     db = DatabaseManager()
-    res = db.column_titles()
-    num = 0
-    for i in res:
-        num += 1
-        print(i.values())
+    res = db.column_titles_translation()
+    print(res)
     db.close()  # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露
