@@ -4,6 +4,8 @@ from PySide6.QtCore import (
     Qt,
 )
 
+from database import DatabaseManager
+
 
 class BookTableModel(QAbstractTableModel):
     """表格视图的数据模型"""
@@ -57,7 +59,9 @@ class BookTableModel(QAbstractTableModel):
     def headerData(self, section, orientation, /, role=...):
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
-                return ["ID", "书名", "路径", "添加日期", "作者"][section]
+                db = DatabaseManager()
+                titles = db.column_titles_translation()
+                return titles[section]
             else:
                 return str(section + 1)
         return None
