@@ -1,0 +1,41 @@
+flowchart LR
+    subgraph 主线程["主线程：MainWindow / UI"]
+        A["MainWindow\nrefresh_view()"]
+        B["_books_cache / _cache_timestamp"]
+        C["_on_books_loaded(books)"]
+        D["CoverCardModel.set_books(books)"]
+        E["QListView\nCoverCardDelegate.paint()"]
+        F["状态栏更新\nstatusbar.showMessage()"]
+    end
+
+    subgraph 工作线程["工作线程：QThread"]
+        G["BookQueryWorker\nfetch_all_books()"]
+        H["sqlite3.connect(db_name)"]
+        I["SELECT * FROM books_information"]
+        J["books_ready.emit(result)"]
+        K["query_error.emit(str)"]
+    end
+
+    subgraph 数据层["数据库层"]
+        DB[(books_information.db)]
+    end
+
+    A -->|1. 检查缓存| B
+    B -->|缓存有效| C
+    B -->|缓存过期| L["trigger_fetch.emit()"]
+    L -->|2. Qt 自动按 QueuedConnection 投递| G
+    G --> H
+    H --> I
+    I --> DB
+    DB -->|返回 rows| G
+    G -->|3. 查询成功| J
+    G -->|4. 查询失败| K
+
+    J -->|5. 回到主线程执行| C
+    C -->|6. 写入缓存| B
+    C --> D
+    D --> E
+    E --> F
+
+    C -. 直接使用缓存 .-> D
+    K -->|7. 提示错误| M["Tips.information_msg()"]

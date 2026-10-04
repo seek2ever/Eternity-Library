@@ -1,0 +1,17 @@
+__pycache__/database.cpython-39.pyc
+__pycache__/database.cpython-39.pyc
+/exercise.py
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Untracked icons
+images/icons/保存.png
+
+# UI test files
+test.ui
+ui_files/
+
+# Claude Code config
+.claude/

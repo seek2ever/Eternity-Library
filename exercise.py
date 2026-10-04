@@ -1,15 +1,1 @@
-import time
-from tqdm import tqdm, trange
-
-
-for i in trange(100):
-    time.sleep(0.01)
-
-for i in tqdm(range(100), desc='processing'):
-    time.sleep(0.05)
-
-dic = ['a', 'b', 'c', 'd', 'e']
-pbar = tqdm(dic)
-for i in pbar:
-    pbar.set_description('processing' + i)
-    time.sleep(0.2)
+raw_data = [{'book_id': '书籍ID'}, {'book_name': '书籍名称'}, {'book_path': '书籍路径'}, {'add_time': '添加时间'}, {'author': '作者'}, {'nationality': '国籍'}, {'translator': '译者'}, {'publisher': '出版社'}, {'publication_date': '出版日期'}, {'level': '书籍等级'}, {'read_status': '阅读状态'}, {'book_type': '书籍类型'}, {'isbn': 'ISBN'}, {'pages': '页数'}, {'read_progress': '阅读进度'}, {'read_time': '阅读时间'}, {'read_date': '阅读日期'}, {'read_link': '阅读链接'}, {'introduction': '简介'}]

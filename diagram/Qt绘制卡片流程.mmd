@@ -1,0 +1,19 @@
+flowchart TD
+    A[QListView 需要显示第 N 本书] --> B[调用 rowCount]
+    B --> C[CoverCardModel 返回 len _books]
+
+    A --> D[调用 data index role]
+    D --> E{role 类型}
+
+    E -- DisplayRole --> F[返回 book name]
+    E -- ToolTipRole --> F
+    E -- BookIdRole --> G[返回 book id]
+    E -- BookNameRole --> F
+    E -- AuthorRole --> H[返回 author]
+    E -- BookTypeRole --> I[返回 type]
+    E -- CoverPathRole --> J[返回 cover_path]
+
+    F --> K[CoverCardDelegate 绘制书名]
+    H --> L[CoverCardDelegate 绘制作者]
+    I --> M[CoverCardDelegate 绘制类型]
+    J --> N[预留的封面图片路径]
