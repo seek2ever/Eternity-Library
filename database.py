@@ -9,9 +9,10 @@ from PySide6.QtCore import (
 
 
 class DatabaseManager(QObject):
+    """负责在主线程中与SQLite数据库交互，提供书籍信息的增删改查功能"""
     # 信号必须在类层级定义，不能在__init__中定义
-    duplicate_book = Signal(str)  # 发送重复书籍名称
-    add_book_result = Signal(bool, str)  # 返回处理结果（成功状态，消息）
+    duplicate_book = Signal(str)                          # 发送重复书籍名称
+    add_book_result = Signal(bool, str)            # 返回处理结果（成功状态，消息）
 
     def __init__(self, db_name='books_information.db'):
         super().__init__()
@@ -56,28 +57,30 @@ class DatabaseManager(QObject):
         # TODO: translations内容采用键值对考虑是否比元组形式更好？
         raw_titles = self.column_titles()
         header = [title[1] for title in raw_titles]
-        # translations = [
-        #     {header[0]: '书籍ID'},
-        #     {header[1]: '书籍名称'},
-        #     {header[2]: '书籍路径'},
-        #     {header[3]: '添加时间'},
-        #     {header[4]: '作者'},
-        #     {header[5]: '国籍'},
-        #     {header[6]: '译者'},
-        #     {header[7]: '出版社'},
-        #     {header[8]: '出版日期'},
-        #     {header[9]: '书籍等级'},
-        #     {header[10]: '阅读状态'},
-        #     {header[11]: '书籍类型'},
-        #     {header[12]: 'ISBN'},
-        #     {header[13]: '页数'},
-        #     {header[14]: '阅读进度'},
-        #     {header[15]: '阅读时间'},
-        #     {header[16]: '阅读日期'},
-        #     {header[17]: '阅读链接'},
-        #     {header[18]: '简介'}
-        # ]
-        return header
+        translation_map = [
+            {header[0]: '书籍ID'},
+            {header[1]: '书籍名称'},
+            {header[2]: '书籍路径'},
+            {header[3]: '添加时间'},
+            {header[4]: '作者'},
+            {header[5]: '国籍'},
+            {header[6]: '译者'},
+            {header[7]: '出版社'},
+            {header[8]: '出版日期'},
+            {header[9]: '书籍等级'},
+            {header[10]: '阅读状态'},
+            {header[11]: '书籍类型'},
+            {header[12]: 'ISBN'},
+            {header[13]: '页数'},
+            {header[14]: '阅读进度'},
+            {header[15]: '阅读时间'},
+            {header[16]: '阅读日期'},
+            {header[17]: '阅读链接'},
+            {header[18]: '简介'}
+        ]
+        # 返回一维字符串列表，方便QAbstractTableModel直接作为表头使用
+        translations = [next(iter(item.values())) for item in translation_map]
+        return translations
 
     def add_column(self, table_name, column_name, column_type='TEXT'):
         """
@@ -307,16 +310,13 @@ class DatabaseManager(QObject):
 
 
 class BookQueryWorker(QObject):
-    """在后台线程中执行数据库查询，避免阻塞 UI 主线程
-
-    关键设计：
-    - __init__ 只接收 db_name（字符串），不接收连接/游标对象
-    - 每次查询在自己的线程内创建独立 sqlite3 连接，查完即关
-    - 这是 SQLite 线程安全的基本要求：连接不能跨线程共享
     """
-    books_ready = Signal(list)  # 查询成功，携带书籍列表
-    query_error = Signal(str)  # 查询失败，携带错误信息
-    trigger_fetch = Signal()  # 触发 fetch_all_books 在后台线程执行
+    在后台线程中执行数据库查询，避免阻塞 UI 主线程
+    每次查询在自己的线程内创建独立 sqlite3 连接，查完即关
+    """
+    books_ready = Signal(list)      # 查询成功，携带书籍列表
+    query_error = Signal(str)       # 查询失败，携带错误信息
+    trigger_fetch = Signal()        # 触发 fetch_all_books 在后台线程执行
 
     def __init__(self, db_name: str):
         """

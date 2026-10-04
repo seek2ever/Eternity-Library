@@ -4,8 +4,6 @@ from PySide6.QtCore import (
     Qt,
 )
 
-from database import DatabaseManager
-
 
 class BookTableModel(QAbstractTableModel):
     """表格视图的数据模型"""
@@ -17,9 +15,10 @@ class BookTableModel(QAbstractTableModel):
     BookTypeRole = Qt.UserRole + 4  # book_type
     CoverPathRole = Qt.UserRole + 5  # 封面图片路径（预留）
 
-    def __init__(self, parent=None):
+    def __init__(self, column_titles=None, parent=None):
         super().__init__(parent)
         self._table_books = []  # 存储书籍数据的列表，每个元素是一个字典，包含书籍的各个字段
+        self._column_titles = column_titles or []
 
     def set_data(self, books):
         """设置表格的数据源"""
@@ -56,12 +55,13 @@ class BookTableModel(QAbstractTableModel):
 
         return None
 
-    def headerData(self, section, orientation, /, role=...):
+    def headerData(self, section, orientation, /, role=Qt.DisplayRole):
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
-                db = DatabaseManager()
-                titles = db.column_titles_translation()
-                return titles[section]
+                if 0 <= section < len(self._column_titles):
+                    return self._column_titles[section]
+                return None
             else:
+                # 垂直方向时，返回行号（从1开始）
                 return str(section + 1)
         return None

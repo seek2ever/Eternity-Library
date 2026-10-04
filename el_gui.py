@@ -45,6 +45,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         # 初始化数据库和信号连接
         self.db = DatabaseManager()
+        self.column_titles = self.db.column_titles_translation()
         self.db.duplicate_book.connect(self.handle_duplicate_book)
         self.db.add_book_result.connect(self.show_add_result)
 
@@ -67,7 +68,9 @@ class MainWindow(QMainWindow):
 
         self.cover_model = CoverCardModel()
         self.cover_delegate = CoverCardDelegate()
-        self.table_model = BookTableModel()
+        self.table_model = BookTableModel(
+            column_titles=self.column_titles
+        )
         self.table_delegate = TableDelegate()
 
         # 窗口组件
