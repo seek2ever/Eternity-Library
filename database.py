@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 import sqlite3
-from typing import Union
+from typing import Union, Any
 from PySide6.QtCore import (
     QObject,
     Signal,
@@ -48,41 +48,6 @@ class DatabaseManager(QObject):
         )
         """)
         self.connection.commit()
-
-    def column_titles(self) -> list:
-        """获取列的标题信息"""
-        titles = self.cursor.execute("PRAGMA table_info(books_information)").fetchall()
-        return titles
-
-    def column_titles_translation(self):
-        """获取列的标题信息并翻译"""
-        # TODO: translations内容采用键值对考虑是否比元组形式更好？
-        raw_titles = self.column_titles()
-        header = [title[1] for title in raw_titles]
-        translation_map = [
-            {header[0]: '书籍ID'},
-            {header[1]: '书籍名称'},
-            {header[2]: '书籍路径'},
-            {header[3]: '添加时间'},
-            {header[4]: '作者'},
-            {header[5]: '国籍'},
-            {header[6]: '译者'},
-            {header[7]: '出版社'},
-            {header[8]: '出版日期'},
-            {header[9]: '书籍等级'},
-            {header[10]: '阅读状态'},
-            {header[11]: '书籍类型'},
-            {header[12]: 'ISBN'},
-            {header[13]: '页数'},
-            {header[14]: '阅读进度'},
-            {header[15]: '阅读时间'},
-            {header[16]: '阅读日期'},
-            {header[17]: '阅读链接'},
-            {header[18]: '简介'}
-        ]
-        # 返回一维字符串列表，方便QAbstractTableModel直接作为表头使用
-        translations = [next(iter(item.values())) for item in translation_map]
-        return translations
 
     def add_column(self, table_name, column_name, column_type='TEXT'):
         """
@@ -266,46 +231,6 @@ class DatabaseManager(QObject):
                 books = self.cursor.fetchall()
                 return books
 
-    def get_all_books(self) -> list:
-        """
-        :return: 所有书籍的信息列表，每个元素都是一个元组
-        例如：(7965672015, '中国科学技术史 天文学卷', 'F:/Books', '2024年04月18日 23:49:50', None, ..., None)
-        """
-        sql = "SELECT * FROM books_information"
-        self.cursor.execute(sql)
-        books = self.cursor.fetchall()
-        return books
-
-    def get_books_by_type(self, book_type):
-        """
-        根据书籍类型获取书籍信息
-        :param book_type: 书籍类型
-        :return: 所有书籍信息列表，元素是一个元组
-        """
-        sql = "SELECT * FROM books_information WHERE book_type=?"
-        self.cursor.execute(sql, (book_type,))
-        return self.cursor.fetchall()
-
-    def get_books_by_status(self, status):
-        """
-        根据书籍状态获取书籍信息
-        :param status: 书籍状态
-        :return: 所有书籍信息列表，元素是一个元组
-        """
-        sql = "SELECT * FROM books_information WHERE status=?"
-        self.cursor.execute(sql, (status,))
-        return self.cursor.fetchall()
-
-    def get_books_by_author(self, author):
-        """
-        根据作者获取书籍信息
-        :param author: 作者名称
-        :return: 所有书籍信息列表，元素是一个元组
-        """
-        sql = "SELECT * FROM books_information WHERE author=?"
-        self.cursor.execute(sql, (author,))
-        return self.cursor.fetchall()
-
     def close(self):
         self.cursor.close()
         self.connection.close()
@@ -315,10 +240,6 @@ class BookQueryWorker(QObject):
     """
     在后台线程中执行数据库查询，避免阻塞UI主线程,线程内创建独立sqlite3连接，查完即关
     """
-    # 应用初始化时查询所用信号
-    initial_books_ready = Signal(list)
-    initial_books_error = Signal(str)
-    trigger_initial_fetch = Signal()
 
     # 应用运行中查询时所用信号
     books_ready = Signal(list)      # 查询成功，携带书籍列表
@@ -350,18 +271,12 @@ class BookQueryWorker(QObject):
         finally:
             conn.close()
 
-    @Slot()
-    def fetch_initial_books(self):
-        """应用初始化时，查询数据库中所有书籍信息，并将书籍信息传递给主线程的_on_initial_books_ready方法"""
-        result = self._execute_query("SELECT * FROM books_information")
-        if result is not None:
-            self.initial_books_ready.emit(result)
-        else:
-            self.initial_books_error.emit("Failed to fetch initial books.")
-
     @Slot()     # 把方法注册到 Qt的元对象系统，确保跨线程排队调用时正确识别执行
     def fetch_all_books(self):
-        """查询全部书籍（在工作线程中执行），传递结果至主线程的_on_books_loaded方法中"""
+        """
+        查询全部书籍（在工作线程中执行），传递结果至主线程的_on_books_loaded方法中
+        例如：(7965672015, '中国科学技术史 天文学卷', 'F:/Books', '2024年04月18日 23:49:50', None, ..., None)
+        """
         result = self._execute_query("SELECT * FROM books_information")
         if result is not None:
             self.books_ready.emit(result)
@@ -386,9 +301,42 @@ class BookQueryWorker(QObject):
             "SELECT * FROM books_information WHERE author=?", (author,)
         )
 
+    def column_titles(self) -> list[tuple[Any, ...]] | str | None:
+        """获取列的标题信息"""
+        titles = self._execute_query("PRAGMA table_info(books_information)")
+        return titles
+
+    def column_titles_translation(self) -> list[str] | str | None:
+        """获取列的标题信息并翻译"""
+        raw_titles = self.column_titles()
+        header = [title[1] for title in raw_titles]
+        translation_map = [
+            {header[0]: '书籍ID'},
+            {header[1]: '书籍名称'},
+            {header[2]: '书籍路径'},
+            {header[3]: '添加时间'},
+            {header[4]: '作者'},
+            {header[5]: '国籍'},
+            {header[6]: '译者'},
+            {header[7]: '出版社'},
+            {header[8]: '出版日期'},
+            {header[9]: '书籍等级'},
+            {header[10]: '阅读状态'},
+            {header[11]: '书籍类型'},
+            {header[12]: 'ISBN'},
+            {header[13]: '页数'},
+            {header[14]: '阅读进度'},
+            {header[15]: '阅读时间'},
+            {header[16]: '阅读日期'},
+            {header[17]: '阅读链接'},
+            {header[18]: '简介'}
+        ]
+        # 返回一维字符串列表，方便QAbstractTableModel直接作为表头使用
+        translations = [next(iter(item.values())) for item in translation_map]
+        return translations
+
 
 if __name__ == '__main__':
-    db = DatabaseManager()
+    db = BookQueryWorker()
     res = db.column_titles_translation()
-    print(res)
-    db.close()  # 必须调用close方法关闭Cursor对象和Connection对象，否则会造成资源泄露
+

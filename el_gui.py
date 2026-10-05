@@ -43,25 +43,24 @@ from table_delegate import TableDelegate
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        # 初始化后台查询线程和缓存变量
+        self._setup_book_worker()
         # 初始化数据库和信号连接
-        self.db = DatabaseManager()
+        self.db = BookQueryWorker()
         self.column_titles = self.db.column_titles_translation()
 
-        self.db.duplicate_book.connect(self.handle_duplicate_book)
-        self.db.add_book_result.connect(self.show_add_result)
-        self._initial_books_cache = None
+        # self.db.duplicate_book.connect(self.handle_duplicate_book)
+        # self.db.add_book_result.connect(self.show_add_result)
+        # self._initial_books_cache = None
 
         # 实例化各个视图对应的数据模型和代理
         self.cover_model = CoverCardModel()
         self.cover_delegate = CoverCardDelegate()
-        self.table_model = BookTableModel(
-            column_titles=self.column_titles
-        )
+        self.table_model = BookTableModel(self.column_titles)
         self.table_delegate = TableDelegate()
-        # 初始化后台查询线程和缓存变量
-        self._setup_book_worker()
 
         # 窗口组件
+        self.splitter: QSplitter | None = None
         self.statusbar: QStatusBar | None = None
         # 左右面板实例属性
         self.left_panel: QWidget | None = None
@@ -93,14 +92,11 @@ class MainWindow(QMainWindow):
         # 连接信号和槽
         self._book_worker.books_ready.connect(self._on_books_loaded)
         self._book_worker.query_error.connect(self._on_query_error)
-        self._book_worker.initial_books_ready.connect(self._on_initial_books_loaded)
-        self._book_worker.initial_books_error.connect(self._on_initial_books_error)
         # trigger_fetch → fetch_all_books：跨线程自动 QueuedConnection
-        self._book_worker.trigger_initial_fetch.connect(self._book_worker.fetch_initial_books)
         self._book_worker.trigger_fetch.connect(self._book_worker.fetch_all_books)
         # 启动工作线程，进入事件循环
         self._query_thread.start()
-        self._book_worker.trigger_initial_fetch.emit()
+        self._book_worker.trigger_fetch.emit()
 
     def setup_ui(self):
         # 设置窗口属性
@@ -153,25 +149,12 @@ class MainWindow(QMainWindow):
 
     def _resize_table_columns(self):
         """调整表格视图的列宽"""
+        # TODO: 目前存在点击按钮调整列宽时主界面卡顿的情况，后续需优化
         if self.table_view is None:
             return
         self.table_view.resizeColumnsToContents()
         self.table_view.resizeRowsToContents()
         return
-
-    def _on_initial_books_loaded(self, books: list) -> None:
-        """收到后台初始查询结果（在主线程执行），直接传递给Model，View会自动刷新"""
-        self._initial_books_cache = books
-        self.cover_model.set_books(books)
-        self.table_model.set_data(books)
-        self.statusbar.showMessage(
-            self._translate("Views", f"已加载初始数据，共 {len(books)} 本书")
-        )
-
-    @staticmethod
-    def _on_initial_books_error(error_msg: str) -> None:
-        """初始查询出错时的处理"""
-        Tips.information_msg(f"数据库初始查询失败：{error_msg}")
 
     def _create_left_panel(self):
         """创建左侧面板"""
@@ -192,7 +175,7 @@ class MainWindow(QMainWindow):
 
         self.resize_btn = QPushButton("调整表格列宽")
         self.resize_btn.setFixedHeight(36)
-        self.resize_btn.clicked.connect(self._resize_table_columns)
+        # self.resize_btn.clicked.connect(self._resize_table_columns)
 
         layout.addWidget(view_label)
         layout.addWidget(self.toggle_view_btn)
@@ -236,9 +219,6 @@ class MainWindow(QMainWindow):
         self.scan_button = QPushButton(self._translate("Scan Files", "扫描文件"))
         self.scan_button.setFixedHeight(36)
         self.scan_button.clicked.connect(self.scan_books)
-
-        # self.show_button = QPushButton(self._translate("Show books information.", "显示书籍信息"))
-        # self.show_button.setFixedHeight(36)
 
         self.clear_button = QPushButton(self._translate("Not show", "取消显示"))
         self.clear_button.setFixedHeight(36)
@@ -429,7 +409,7 @@ class MainWindow(QMainWindow):
         """窗口关闭时安全退出后台线程"""
         self._query_thread.quit()  # 退出线程的事件循环
         self._query_thread.wait(3000)  # 等待线程结束（最多 3 秒）
-        self.db.close()  # 关闭数据库连接
+        # self.db.close()  # 关闭数据库连接
         event.accept()
 
     @staticmethod

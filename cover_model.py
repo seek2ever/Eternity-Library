@@ -57,9 +57,9 @@ class CoverCardModel(QAbstractListModel):
         return None
 
     def set_books(self, books):
-        """批量替换全部数据（数据库查询完成后调用）。
-        使用 beginResetModel/endResetModel 通知 View：
-        "数据全变了，请全部重绘"。
+        """
+        批量替换全部数据（数据库查询完成后调用）。
+        使用 beginResetModel/endResetModel 通知 View：数据全变了，请全部重绘。
         """
         self.beginResetModel()
         self._books = [
