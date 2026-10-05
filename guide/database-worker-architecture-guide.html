@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>三木书斋数据库线程化重构学习指南</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 17mm; }
+  :root {
+    --ink: #263238; --muted: #546e7a; --blue: #1565c0; --blue-bg: #e3f2fd;
+    --green: #2e7d32; --green-bg: #e8f5e9; --orange: #ef6c00; --orange-bg: #fff3e0;
+    --red: #c62828; --red-bg: #ffebee; --line: #cfd8dc; --code: #f5f7f9;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
+         color: var(--ink); line-height: 1.7; font-size: 10.5pt; }
+  h1 { font-size: 25pt; color: #0d47a1; margin: 0 0 8pt; line-height: 1.25; }
+  h2 { font-size: 17pt; color: #0d47a1; border-bottom: 2px solid #90caf9;
+       padding-bottom: 4pt; margin: 22pt 0 9pt; page-break-after: avoid; }
+  h3 { font-size: 12.5pt; color: #37474f; margin: 15pt 0 5pt; page-break-after: avoid; }
+  p { margin: 5pt 0 8pt; }
+  ul, ol { margin-top: 4pt; }
+  li { margin: 2pt 0; }
+  .cover { min-height: 245mm; display: flex; flex-direction: column; justify-content: center;
+           padding: 18mm; background: linear-gradient(145deg, #e3f2fd, #ffffff 58%, #e8f5e9);
+           border: 1px solid #bbdefb; }
+  .subtitle { font-size: 14pt; color: var(--muted); margin-bottom: 22pt; }
+  .meta { color: var(--muted); border-top: 1px solid #90caf9; padding-top: 10pt; }
+  .notice, .warning, .success { padding: 9pt 12pt; border-left: 4px solid; margin: 9pt 0;
+                                page-break-inside: avoid; }
+  .notice { background: var(--blue-bg); border-color: var(--blue); }
+  .warning { background: var(--orange-bg); border-color: var(--orange); }
+  .success { background: var(--green-bg); border-color: var(--green); }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0 12pt; page-break-inside: avoid; }
+  th, td { border: 1px solid var(--line); padding: 6pt 7pt; vertical-align: top; }
+  th { background: #eceff1; color: #263238; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  code { font-family: Consolas, "Cascadia Code", monospace; background: var(--code);
+         padding: 1px 4px; border-radius: 3px; font-size: 9pt; }
+  pre { background: #263238; color: #eceff1; padding: 10pt 12pt; border-radius: 5pt;
+        font: 8.5pt/1.55 Consolas, "Cascadia Code", monospace; white-space: pre-wrap;
+        page-break-inside: avoid; }
+  .small { color: var(--muted); font-size: 9pt; }
+  .page-break { page-break-before: always; }
+  .diagram { border: 1px solid var(--line); background: #fcfdfe; padding: 10pt;
+             margin: 10pt 0 13pt; page-break-inside: avoid; }
+  .diagram-title { font-weight: bold; color: #455a64; margin-bottom: 8pt; }
+  .flow-row { display: flex; align-items: stretch; justify-content: center; gap: 6pt; }
+  .flow-col { display: flex; flex-direction: column; align-items: center; gap: 5pt; }
+  .box { border: 1.5px solid #78909c; border-radius: 5pt; padding: 7pt 9pt;
+         text-align: center; min-width: 110pt; background: white; }
+  .box.main { background: var(--blue-bg); border-color: var(--blue); }
+  .box.worker { background: var(--green-bg); border-color: var(--green); }
+  .box.db { background: var(--orange-bg); border-color: var(--orange); }
+  .box.warn { background: var(--red-bg); border-color: var(--red); }
+  .arrow { font-size: 17pt; color: #607d8b; align-self: center; }
+  .down { color: #607d8b; font-size: 16pt; line-height: 1; }
+  .lane { flex: 1; border: 1px dashed #b0bec5; padding: 7pt; border-radius: 5pt; }
+  .lane h4 { margin: 0 0 5pt; text-align: center; color: #455a64; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; }
+  .card { border: 1px solid var(--line); border-radius: 5pt; padding: 8pt 10pt; }
+  .checklist { list-style: none; padding-left: 0; }
+  .checklist li::before { content: "□ "; color: var(--blue); font-weight: bold; }
+  .footer { color: #78909c; font-size: 8.5pt; border-top: 1px solid var(--line);
+            margin-top: 18pt; padding-top: 5pt; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>三木书斋数据库线程化重构</h1>
+  <div class="subtitle">从 DatabaseManager + BookQueryWorker 到统一 DatabaseWorker</div>
+  <p>一份面向学习和实施的完整方案：解释为什么要把耗时数据库操作放入工作线程，如何设计 Qt 信号槽、SQLite 连接、事务、查询结果和界面刷新，以及如何分阶段落地。</p>
+  <div class="notice"><b>重要范围说明：</b>本文是设计与学习指南。本次只生成说明文档，不直接修改项目中的 <code>database.py</code>、<code>el_gui.py</code> 或其他业务代码。</div>
+  <div class="meta">
+    <p><b>适用项目：</b>Eternity-Library（三木书斋）</p>
+    <p><b>技术背景：</b>Python 3.12+、PySide6、SQLite3</p>
+    <p><b>核心目标：</b>主线程只负责 UI；数据库读写在统一工作线程中串行执行；结果通过信号返回。</p>
+  </div>
+</section>
+
+<h2>1. 先给结论：推荐怎样重构</h2>
+<div class="success"><b>推荐方案：</b>使用一个长期运行的 <code>DatabaseWorker</code> 和一个专用 <code>QThread</code>，让它负责所有数据库操作（查询、插入、更新、删除、事务和连接关闭）。<code>MainWindow</code> 不直接执行 SQL，也不持有工作线程的 SQLite 连接。</div>
+
+<div class="diagram">
+  <div class="diagram-title">图 1：推荐的总体结构</div>
+  <div class="flow-row">
+    <div class="box main">MainWindow<br><span class="small">主线程 / UI / Model</span></div>
+    <div class="arrow">⇄<br><span class="small">Qt 信号</span></div>
+    <div class="box worker">DatabaseWorker<br><span class="small">专用 QThread</span></div>
+    <div class="arrow">⇄</div>
+    <div class="box db">SQLite<br><span class="small">线程内连接</span></div>
+  </div>
+</div>
+
+<p>这里的“统一”不是说所有代码必须写在一个大类里，而是指数据库连接和数据库操作的执行入口统一到一个工作线程。界面层只发出“我要查询”“我要添加”的请求，不直接调用 SQL。</p>
+
+<h3>为什么不优先拆成读线程和写线程</h3>
+<table>
+  <tr><th>考虑点</th><th>两个线程（读/写分离）</th><th>一个 DatabaseWorker</th></tr>
+  <tr><td>SQLite 写入</td><td>仍然只有一个写者更安全，读写同步复杂</td><td>操作天然串行，事务顺序清晰</td></tr>
+  <tr><td>数据一致性</td><td>写入后何时刷新、查询是否读到旧数据，需要额外协调</td><td>写入完成后发出变更信号，再查询即可</td></tr>
+  <tr><td>学习成本</td><td>需要理解多个队列、连接和竞态</td><td>更容易理解和调试</td></tr>
+  <tr><td>当前项目规模</td><td>容易过度设计</td><td>足够支撑当前功能</td></tr>
+</table>
+
+<h2>2. 当前代码的主要问题</h2>
+<p>现有设计已经迈出了重要一步：<code>BookQueryWorker</code> 在查询函数内部创建独立 SQLite 连接，并在查询结束后关闭，这比把主线程连接直接传入工作线程安全得多。但仍有以下边界问题。</p>
+<ol>
+  <li><b>写入仍在主线程：</b><code>ScanBookFiles.write_into_database()</code> 循环调用 <code>DatabaseManager.add_book()</code>，每本书还可能执行多次 SQL 和提交事务，大量文件会卡住 UI。</li>
+  <li><b>连接职责分裂：</b>一个对象维护长期连接，另一个对象每次查询创建连接；读写后的刷新和错误处理容易出现不一致。</li>
+  <li><b>查询结果错误处理不完整：</b>当前查询函数把异常文本和正常列表放在同一个返回类型中，调用方可能误把错误字符串当成书籍列表。</li>
+  <li><b>筛选查询没有回传信号：</b>按类型、状态、作者查询后没有发出 <code>books_ready</code>，因此 UI 无法可靠刷新。</li>
+  <li><b>一次性加载全部字段：</b><code>SELECT *</code> 会把所有列、所有记录一次性传入主线程；主线程更新 Model 和 View 仍可能耗时。</li>
+  <li><b>模型数据格式尚未统一：</b>数据库返回元组，而封面模型期望字典；这不是线程问题，但重构时应一起明确数据结构。</li>
+</ol>
+
+<div class="warning"><b>关键认识：</b>“查询放后台”只解决 SQL 执行阶段的阻塞。结果回到主线程后，数据转换、Model 重置、视图布局和图片加载仍可能卡顿。因此线程化、分页、减少字段和渐进式渲染要配合使用。</div>
+
+<h2>3. Qt 线程模型：必须先理解的概念</h2>
+<h3>3.1 QThread 与 Worker 的关系</h3>
+<p><code>QThread</code> 是线程控制对象；<code>DatabaseWorker</code> 是实际执行任务的对象。常见模式是：主线程创建 Worker，把 Worker 用 <code>moveToThread()</code> 移交给工作线程，再通过信号触发 Worker 的槽函数。</p>
+<pre>主线程创建 QThread
+主线程创建 DatabaseWorker
+DatabaseWorker.moveToThread(QThread)
+连接 request_* 信号 → Worker 槽函数
+连接 Worker 结果信号 → MainWindow 槽函数
+QThread.start()
+发出 request_* 信号，工作线程排队执行槽函数</pre>
+
+<h3>3.2 为什么不能在工作线程直接操作 Qt Model 和 Widget</h3>
+<p>Qt 的大多数 GUI 对象，包括 <code>QTableView</code>、<code>QListView</code>、<code>QAbstractTableModel</code> 的数据变更，都应在主线程完成。工作线程只返回普通 Python 数据（例如列表、元组或数据类）。主线程收到信号后，再调用 <code>beginResetModel()</code>、<code>endResetModel()</code> 等方法。</p>
+
+<div class="diagram">
+  <div class="diagram-title">图 2：一次查询的线程边界</div>
+  <div class="flow-row">
+    <div class="lane"><h4>主线程</h4><div class="box main">用户点击刷新</div><div class="down">↓</div><div class="box main">emit(request_fetch)</div><div class="down">↑</div><div class="box main">收到结果，更新 Model/View</div></div>
+    <div class="lane"><h4>DatabaseThread</h4><div class="box worker">执行查询槽函数</div><div class="down">↓</div><div class="box db">SQLite execute/fetchall</div><div class="down">↓</div><div class="box worker">emit(result)</div></div>
+  </div>
+</div>
+
+<h2>4. 推荐的职责划分</h2>
+<table>
+  <tr><th>对象</th><th>负责什么</th><th>不负责什么</th></tr>
+  <tr><td><code>MainWindow</code></td><td>按钮、状态栏、加载提示、接收结果、更新 View</td><td>不执行 SQL，不持有 Worker 的连接</td></tr>
+  <tr><td><code>DatabaseWorker</code></td><td>连接、建表、查询、增删改、事务、错误信号</td><td>不访问 QWidget/QTableView，不弹 QMessageBox</td></tr>
+  <tr><td><code>BookTableModel</code> / <code>CoverCardModel</code></td><td>保存主线程数据并通知 View 绘制</td><td>不查询数据库，不创建线程</td></tr>
+  <tr><td><code>ScanBookFiles</code></td><td>扫描文件、整理待入库数据</td><td>不直接 new 数据库连接；通过请求信号提交</td></tr>
+  <tr><td>数据库辅助函数</td><td>构造参数化 SQL、转换记录、定义字段常量</td><td>不依赖 UI 对象</td></tr>
+</table>
+
+<h2>5. DatabaseWorker 的接口设计</h2>
+<p>建议先设计清楚信号和槽，再开始改代码。接口不必一次覆盖所有功能，先实现“查询全部 + 批量写入 + 删除 + 关闭”即可。</p>
+
+<h3>5.1 请求信号与结果信号</h3>
+<pre>class DatabaseWorker(QObject):
+    # MainWindow → Worker
+    request_fetch_all = Signal()
+    request_fetch_filtered = Signal(str, object)  # filter_name, filter_value
+    request_insert_many = Signal(list)
+    request_delete = Signal(int)
+    request_update = Signal(int, dict)
+
+    # Worker → MainWindow
+    books_ready = Signal(list)
+    operation_succeeded = Signal(str)
+    operation_failed = Signal(str)
+    database_ready = Signal()
+    database_closed = Signal()</pre>
+
+<p>信号参数应尽量表达“业务结果”，不要把 <code>sqlite3.Cursor</code>、连接对象或 Worker 本身传到主线程。错误统一走 <code>operation_failed</code>，主线程再决定显示状态栏、弹窗还是记录日志。</p>
+
+<h3>5.2 Worker 内部连接的生命周期</h3>
+<div class="diagram">
+  <div class="diagram-title">图 3：数据库连接生命周期</div>
+  <div class="flow-row">
+    <div class="box worker">线程启动</div><div class="arrow">→</div>
+    <div class="box db">Worker.init_database()<br>在工作线程 connect()</div><div class="arrow">→</div>
+    <div class="box worker">连续处理请求</div><div class="arrow">→</div>
+    <div class="box db">Worker.close_database()<br>commit/close()</div><div class="arrow">→</div>
+    <div class="box worker">线程退出</div>
+  </div>
+</div>
+<p>连接有两种可选策略：</p>
+<ul>
+  <li><b>长期连接（推荐当前项目）：</b>线程启动时创建，所有操作使用同一个连接，关闭线程时关闭。代码简单、事务连续。</li>
+  <li><b>每次请求新建连接：</b>每个槽函数内部 <code>connect()</code>、执行、关闭。隔离性更强，但重复创建连接、事务和初始化逻辑更多。</li>
+</ul>
+<div class="notice">无论选择哪种策略，都必须保证“连接在哪个线程创建，就在哪个线程使用和关闭”。不要在主线程创建连接后，再把连接对象传入工作线程。</div>
+
+<h2>6. 读操作的完整流程</h2>
+<div class="diagram">
+  <div class="diagram-title">图 4：查询、转换和界面刷新时序</div>
+  <div class="flow-row">
+    <div class="lane"><h4>用户界面</h4><div class="box main">点击刷新/筛选</div><div class="down">↓</div><div class="box main">显示“正在加载”</div><div class="down">↓</div><div class="box main">发出请求信号</div><div class="down">↑</div><div class="box main">接收 books_ready</div><div class="down">↓</div><div class="box main">更新两个 Model</div></div>
+    <div class="lane"><h4>数据库工作线程</h4><div class="box worker">接收请求槽</div><div class="down">↓</div><div class="box db">参数化 SELECT</div><div class="down">↓</div><div class="box worker">转换为统一记录</div><div class="down">↓</div><div class="box worker">发出 books_ready</div></div>
+  </div>
+</div>
+
+<h3>6.1 查询语句的建议</h3>
+<pre>-- 封面模式只取必要字段
+SELECT book_id, book_name, author, book_type, book_path
+FROM books_information
+ORDER BY book_id
+LIMIT ? OFFSET ?;
+
+-- 列表模式按需取完整字段
+SELECT book_id, book_name, book_path, add_time, author, nationality,
+       translator, publisher, publication_date, level, read_status,
+       book_type, isbn, pages, read_progress, read_time, read_date,
+       read_link, introduction
+FROM books_information
+ORDER BY book_id;</pre>
+
+<p>不要把用户输入直接拼接到 SQL 中。值使用 <code>?</code> 参数绑定；列名和排序字段如果必须动态选择，应使用代码中的白名单映射，而不是直接接收任意字符串。</p>
+
+<h3>6.2 空结果、错误和过期请求</h3>
+<table>
+  <tr><th>情况</th><th>Worker 行为</th><th>主线程行为</th></tr>
+  <tr><td>查询成功且有数据</td><td>发出 <code>books_ready(list)</code></td><td>替换 Model 数据</td></tr>
+  <tr><td>查询成功但为空</td><td>仍发出空列表</td><td>清空 Model，并显示“暂无书籍”</td></tr>
+  <tr><td>SQL 失败</td><td>回滚（如有事务），发出错误信号</td><td>恢复按钮状态，提示用户</td></tr>
+  <tr><td>连续快速筛选</td><td>为请求附带 request_id 或筛选条件</td><td>只接受最新请求，避免旧结果覆盖新结果</td></tr>
+</table>
+
+<h2>7. 写操作与事务设计</h2>
+<h3>7.1 为什么批量写入必须移动到工作线程</h3>
+<p>扫描目录后，通常会一次产生多本书。当前实现每次插入后都可能提交一次事务；如果有重复判断、生成 ID、更新 ID 等步骤，SQL 次数会更多。主线程在这些操作全部完成之前无法处理界面事件。</p>
+
+<div class="diagram">
+  <div class="diagram-title">图 5：批量入库流程</div>
+  <div class="flow-row">
+    <div class="box main">扫描线程/主线程<br>整理 book_data 列表</div><div class="arrow">→</div>
+    <div class="box worker">DatabaseWorker<br>begin transaction</div><div class="arrow">→</div>
+    <div class="box db">逐条校验/插入<br>必要时更新或跳过</div><div class="arrow">→</div>
+    <div class="box worker">commit</div><div class="arrow">→</div>
+    <div class="box main">发出 books_changed<br>重新查询或增量更新</div>
+  </div>
+</div>
+
+<h3>7.2 事务的基本规则</h3>
+<pre>try:
+    connection.execute("BEGIN")
+    for book in books:
+        insert_or_handle_duplicate(book)
+    connection.commit()
+except sqlite3.Error:
+    connection.rollback()
+    raise</pre>
+<ul>
+  <li>一批书籍要么整体成功，要么整体回滚；如果业务要求“部分成功”，应逐条记录结果，但仍要明确哪些记录成功。</li>
+  <li>不要在事务中弹 UI 对话框。重复书籍的策略应在请求中提前指定，或 Worker 发出“发现重复”信号后暂停当前任务，由主线程返回用户选择。</li>
+  <li>更简单的第一阶段方案是：扫描时先检查重复并采用固定策略（跳过），后续再实现可交互的覆盖/重命名。</li>
+</ul>
+
+<h3>7.3 重复书籍交互的两种方案</h3>
+<table>
+  <tr><th>方案</th><th>流程</th><th>适合阶段</th></tr>
+  <tr><td>A：预先询问</td><td>主线程先查询重复项 → 弹窗 → 用户选择 → 把最终数据和策略发送给 Worker</td><td>第一版，流程简单</td></tr>
+  <tr><td>B：Worker 暂停请求</td><td>Worker 发现重复 → 发出 duplicate_found → 主线程询问 → 主线程发回 decision → Worker 继续</td><td>需要复杂交互时</td></tr>
+</table>
+
+<h2>8. 主线程与 Worker 的初始化/关闭流程</h2>
+<div class="diagram">
+  <div class="diagram-title">图 6：应用生命周期</div>
+  <div class="flow-col">
+    <div class="box main">MainWindow 初始化</div><div class="down">↓</div>
+    <div class="box worker">创建 QThread + DatabaseWorker</div><div class="down">↓</div>
+    <div class="box worker">moveToThread，连接信号槽</div><div class="down">↓</div>
+    <div class="box db">thread.start → init_database</div><div class="down">↓</div>
+    <div class="box main">UI 可用，发出查询/写入请求</div><div class="down">↓</div>
+    <div class="box main">closeEvent：发出 request_close</div><div class="down">↓</div>
+    <div class="box db">Worker commit/close</div><div class="down">↓</div>
+    <div class="box worker">thread.quit + thread.wait</div>
+  </div>
+</div>
+
+<div class="warning"><b>关闭顺序很重要：</b>不要先销毁 Worker 或数据库连接，再让线程继续运行；也不要在还有写入请求时直接强制终止线程。关闭窗口时应停止接受新请求，等待当前任务完成，再关闭连接和线程。</div>
+
+<h2>9. 分阶段实施路线（不要求一次改完）</h2>
+<ol>
+  <li><b>阶段 0：统一数据结构。</b>明确数据库列顺序，定义字段常量或数据类，解决“元组/字典混用”问题。</li>
+  <li><b>阶段 1：只迁移读取。</b>保留现有写入逻辑，建立统一 Worker，完成全部查询、筛选、空结果和错误信号。</li>
+  <li><b>阶段 2：迁移批量写入。</b>把扫描结果作为列表发送给 Worker，在一个事务中处理；成功后发出变更信号。</li>
+  <li><b>阶段 3：迁移删除和更新。</b>所有修改都走 Worker，禁止 UI 直接调用连接或游标。</li>
+  <li><b>阶段 4：性能优化。</b>增加分页、字段裁剪、索引和缓存；必要时对封面生成、图片读取单独做任务。</li>
+  <li><b>阶段 5：清理旧接口。</b>确认没有调用方后，删除旧的主线程连接、重复的 Worker 实例和无效的同步查询方法。</li>
+</ol>
+
+<h3>每个阶段都要验证什么</h3>
+<ul class="checklist">
+  <li>启动应用后数据库文件和表能正常创建。</li>
+  <li>空数据库可以正常显示空状态，而不是保留旧数据。</li>
+  <li>查询期间窗口仍能移动、点击和关闭。</li>
+  <li>批量扫描时界面不会长时间卡死。</li>
+  <li>插入失败时事务会回滚，并且用户能看到错误。</li>
+  <li>写入完成后列表和封面视图都能刷新。</li>
+  <li>快速连续筛选不会出现旧结果覆盖新结果。</li>
+  <li>关闭窗口时没有“QThread destroyed while thread is still running”警告。</li>
+</ul>
+
+<h2>10. 性能优化的优先级</h2>
+<table>
+  <tr><th>优先级</th><th>措施</th><th>解决的问题</th></tr>
+  <tr><td>1</td><td>所有读写放入 Worker</td><td>避免 SQL 阻塞主线程</td></tr>
+  <tr><td>2</td><td>批量写入使用一个事务</td><td>减少每条记录 commit 的开销</td></tr>
+  <tr><td>3</td><td>查询只取需要的字段</td><td>减少 SQLite、Python 和信号传输数据量</td></tr>
+  <tr><td>4</td><td>封面模式分页/分批加载</td><td>避免一次重绘数千个卡片</td></tr>
+  <tr><td>5</td><td>为筛选列建立索引</td><td>加快类型、状态、作者筛选</td></tr>
+  <tr><td>6</td><td>缓存稳定查询结果</td><td>减少重复查询，但要在写入后失效</td></tr>
+</table>
+<pre>CREATE INDEX IF NOT EXISTS idx_books_book_type
+ON books_information(book_type);
+
+CREATE INDEX IF NOT EXISTS idx_books_read_status
+ON books_information(read_status);
+
+CREATE INDEX IF NOT EXISTS idx_books_author
+ON books_information(author);</pre>
+<p class="small">索引不是越多越好：它会加快查询，但会增加写入成本和数据库体积。应根据实际筛选频率决定。</p>
+
+<h2>11. 推荐的伪代码骨架</h2>
+<p>以下只是帮助理解结构的伪代码，不是要求直接复制到项目中的完整实现。</p>
+<pre>class DatabaseWorker(QObject):
+    books_ready = Signal(list)
+    operation_failed = Signal(str)
+    books_changed = Signal()
+
+    @Slot()
+    def initialize(self):
+        self.connection = sqlite3.connect(self.db_name)
+        self.create_table()
+
+    @Slot()
+    def fetch_all(self):
+        try:
+            rows = self.connection.execute(
+                "SELECT book_id, book_name, author, book_type "
+                "FROM books_information ORDER BY book_id"
+            ).fetchall()
+        except sqlite3.Error as error:
+            self.operation_failed.emit(str(error))
+            return
+        self.books_ready.emit(rows)
+
+    @Slot(list)
+    def insert_many(self, books):
+        try:
+            with self.connection:
+                for book in books:
+                    self.insert_one(book)
+        except sqlite3.Error as error:
+            self.operation_failed.emit(str(error))
+            return
+        self.books_changed.emit()
+
+    @Slot()
+    def close_database(self):
+        if self.connection is not None:
+            self.connection.close()
+        self.database_closed.emit()</pre>
+
+<h2>12. 最终建议清单</h2>
+<div class="two-col">
+  <div class="card"><b>建议做</b>
+    <ul>
+      <li>采用一个专用 DatabaseWorker 线程。</li>
+      <li>连接在 Worker 所在线程创建和关闭。</li>
+      <li>所有数据库操作通过信号槽请求。</li>
+      <li>主线程只更新 Model 和 View。</li>
+      <li>批量写入使用事务。</li>
+      <li>空结果也发正常结果信号。</li>
+      <li>逐步加入分页、索引和字段裁剪。</li>
+    </ul>
+  </div>
+  <div class="card"><b>不要做</b>
+    <ul>
+      <li>不要把 SQLite connection 跨线程传递。</li>
+      <li>不要在 Worker 中操作 QWidget。</li>
+      <li>不要让查询错误伪装成正常列表。</li>
+      <li>不要每本书都单独 commit。</li>
+      <li>不要用 SELECT * 支撑所有视图。</li>
+      <li>不要为了“读写分离”过早创建多个数据库线程。</li>
+      <li>不要在关闭窗口时强制杀死仍在写入的线程。</li>
+    </ul>
+  </div>
+</div>
+
+<h2>结语</h2>
+<p>这次重构的核心不是把代码“搬进线程”这么简单，而是建立清晰的边界：<b>UI 提出请求，DatabaseWorker 执行数据库操作，结果通过信号返回，Model 在主线程更新。</b>对于当前项目，单个数据库工作线程比读写双线程更容易学习、验证和维护；等数据规模和功能复杂度真正增长后，再考虑分页加载、任务队列或更细粒度的并发优化。</p>
+
+<div class="footer">Eternity-Library guide · 数据库线程化重构学习指南 · 本文仅新增指南文件，不修改项目业务代码</div>
+</body>
+</html>
