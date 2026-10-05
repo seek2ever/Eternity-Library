@@ -1,10 +1,7 @@
-"""
-此模块主要用于处理与GUI（图形用户界面）的代码，
-与书籍文件进行具体交互的功能放在books.py中
-"""
+from __future__ import annotations
+
 import sys
 import time
-from typing import Optional
 
 from PySide6 import QtGui
 from PySide6.QtCore import (
@@ -27,7 +24,6 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QStatusBar,
     QTableView,
-    QTableWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -50,36 +46,35 @@ class MainWindow(QMainWindow):
         # 初始化数据库和信号连接
         self.db = DatabaseManager()
         self.column_titles = self.db.column_titles_translation()
+
         self.db.duplicate_book.connect(self.handle_duplicate_book)
         self.db.add_book_result.connect(self.show_add_result)
+        self._initial_books_cache = None
 
-        self._setup_book_worker()
-
-        # 左右面板实例属性声明
-        self.left_panel: Optional[QWidget] = None
-        self.right_stack: Optional[QStackedWidget] = None
-
-        # 左侧面板组件
-        self.toggle_view_btn: Optional[QPushButton] = None
-        self.category_list: Optional[QListWidget] = None
-        self.scan_button: Optional[QPushButton] = None
-        self.clear_button: Optional[QPushButton] = None
-        self.close_button: Optional[QPushButton] = None
-
-        # 右侧视图组件（封面卡片视图+表格视图）
-        self.cover_card_view: QListView
-        self.table_view: QTableView
-
+        # 实例化各个视图对应的数据模型和代理
         self.cover_model = CoverCardModel()
         self.cover_delegate = CoverCardDelegate()
         self.table_model = BookTableModel(
             column_titles=self.column_titles
         )
         self.table_delegate = TableDelegate()
+        # 初始化后台查询线程和缓存变量
+        self._setup_book_worker()
 
         # 窗口组件
-        self.splitter: Optional[QSplitter] = None
-        self.statusbar: Optional[QStatusBar] = None
+        self.statusbar: QStatusBar | None = None
+        # 左右面板实例属性
+        self.left_panel: QWidget | None = None
+        self.right_stack: QStackedWidget | None = None
+        # 左侧面板组件
+        self.toggle_view_btn: QPushButton | None = None
+        self.category_list: QListWidget | None = None
+        self.scan_button: QPushButton | None = None
+        self.clear_button: QPushButton | None = None
+        self.close_button: QPushButton | None = None
+        # 右侧视图组件（封面卡片视图+表格视图）
+        self.cover_card_view: QListView | None = None
+        self.table_view: QTableView | None = None
 
         self.setup_ui()
 
@@ -92,16 +87,20 @@ class MainWindow(QMainWindow):
         # 创建后台查询线程
         self._query_thread = QThread()
         # 创建Worker（传入数据库文件名books_information.db，不传连接对象）
-        self._book_worker = BookQueryWorker(self.db.db_name)
+        self._book_worker = BookQueryWorker()
         # 把 Worker 移到工作线程（此后Worker的所有槽函数在工作线程执行）
         self._book_worker.moveToThread(self._query_thread)
         # 连接信号和槽
         self._book_worker.books_ready.connect(self._on_books_loaded)
         self._book_worker.query_error.connect(self._on_query_error)
+        self._book_worker.initial_books_ready.connect(self._on_initial_books_loaded)
+        self._book_worker.initial_books_error.connect(self._on_initial_books_error)
         # trigger_fetch → fetch_all_books：跨线程自动 QueuedConnection
+        self._book_worker.trigger_initial_fetch.connect(self._book_worker.fetch_initial_books)
         self._book_worker.trigger_fetch.connect(self._book_worker.fetch_all_books)
         # 启动工作线程，进入事件循环
         self._query_thread.start()
+        self._book_worker.trigger_initial_fetch.emit()
 
     def setup_ui(self):
         # 设置窗口属性
@@ -152,7 +151,27 @@ class MainWindow(QMainWindow):
         QListWidget {font-size: 11pt; font-family: Microsoft YaHei;}
         """)
 
-        self.refresh_view()
+    def _resize_table_columns(self):
+        """调整表格视图的列宽"""
+        if self.table_view is None:
+            return
+        self.table_view.resizeColumnsToContents()
+        self.table_view.resizeRowsToContents()
+        return
+
+    def _on_initial_books_loaded(self, books: list) -> None:
+        """收到后台初始查询结果（在主线程执行），直接传递给Model，View会自动刷新"""
+        self._initial_books_cache = books
+        self.cover_model.set_books(books)
+        self.table_model.set_data(books)
+        self.statusbar.showMessage(
+            self._translate("Views", f"已加载初始数据，共 {len(books)} 本书")
+        )
+
+    @staticmethod
+    def _on_initial_books_error(error_msg: str) -> None:
+        """初始查询出错时的处理"""
+        Tips.information_msg(f"数据库初始查询失败：{error_msg}")
 
     def _create_left_panel(self):
         """创建左侧面板"""
@@ -171,8 +190,13 @@ class MainWindow(QMainWindow):
         self.toggle_view_btn.setFixedHeight(36)
         self.toggle_view_btn.clicked.connect(self._toggle_view_mode)
 
+        self.resize_btn = QPushButton("调整表格列宽")
+        self.resize_btn.setFixedHeight(36)
+        self.resize_btn.clicked.connect(self._resize_table_columns)
+
         layout.addWidget(view_label)
         layout.addWidget(self.toggle_view_btn)
+        layout.addWidget(self.resize_btn)
 
         # 分隔线
         line = QFrame()
@@ -193,7 +217,7 @@ class MainWindow(QMainWindow):
             "按作者",
         ])
         self.category_list.setFixedHeight(140)
-        self.category_list.currentRowChanged.connect(self._on_category_changed)
+        # self.category_list.currentRowChanged.connect(self._on_category_changed)
 
         layout.addWidget(filter_label)
         layout.addWidget(self.category_list)
@@ -238,10 +262,6 @@ class MainWindow(QMainWindow):
         self.table_view.setModel(self.table_model)
         # TODO: 暂时使用使用默认的显示和编辑行为，后续再完善自定义delegate以便支持更复杂的显示和编辑行为
         # self.table_view.setItemDelegate(self.table_delegate)
-
-        # TODO: 调整列宽和行高的时机不对， 目前在切换到表格视图时，数据还未加载完成，导致列宽和行高调整不正确
-        self.table_view.resizeColumnsToContents()
-        self.table_view.resizeRowsToContents()
         self.table_view.setShowGrid(True)
         return self.table_view
 
@@ -334,25 +354,25 @@ class MainWindow(QMainWindow):
             self._translate("Views", f"已刷新，共 {len(books)} 本书")
         )
 
-    def _on_category_changed(self, row: int) -> None:
-        """左侧分类选择变化时触发"""
-        # TODO：目前此方法不方便同时进行多项筛选，后续需优化
-        categories = ["全部", "按书籍类型", "按阅读状态", "按作者"]
-        if row < 0 or row >= len(categories):
-            return
-        category = categories[row]
-        self.statusbar.showMessage(self._translate("Views", f"已选择分类：{category}"))
-        if category == "全部":
-            books = self.db.get_all_books()
-        elif category == "按书籍类型":
-            books = self.db.get_books_by_type()
-        elif category == "按阅读状态":
-            books = self.db.get_books_by_status()
-        elif category == "按作者":
-            books = self.db.get_books_by_author()
+    # def _on_category_changed(self, row: int) -> None:
+    #     """左侧分类选择变化时触发"""
+    #     # TODO：目前此方法不方便同时进行多项筛选，后续需优化
+    #     categories = ["全部", "按书籍类型", "按阅读状态", "按作者"]
+    #     if row < 0 or row >= len(categories):
+    #         return
+    #     category = categories[row]
+    #     self.statusbar.showMessage(self._translate("Views", f"已选择分类：{category}"))
+    #     if category == "全部":
+    #         books = self.db.get_all_books()
+    #     elif category == "按书籍类型":
+    #         books = self.db.get_books_by_type()
+    #     elif category == "按阅读状态":
+    #         books = self.db.get_books_by_status()
+    #     elif category == "按作者":
+    #         books = self.db.get_books_by_author()
 
-        # 刷新封面和列表视图
-        self.refresh_view()
+        # # 刷新封面和列表视图
+        # self.refresh_view()
 
     @staticmethod
     def scan_books(self) -> None:

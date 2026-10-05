@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import random
 import sqlite3
 from typing import Union
@@ -311,25 +313,30 @@ class DatabaseManager(QObject):
 
 class BookQueryWorker(QObject):
     """
-    在后台线程中执行数据库查询，避免阻塞 UI 主线程
-    每次查询在自己的线程内创建独立 sqlite3 连接，查完即关
+    在后台线程中执行数据库查询，避免阻塞UI主线程,线程内创建独立sqlite3连接，查完即关
     """
+    # 应用初始化时查询所用信号
+    initial_books_ready = Signal(list)
+    initial_books_error = Signal(str)
+    trigger_initial_fetch = Signal()
+
+    # 应用运行中查询时所用信号
     books_ready = Signal(list)      # 查询成功，携带书籍列表
     query_error = Signal(str)       # 查询失败，携带错误信息
     trigger_fetch = Signal()        # 触发 fetch_all_books 在后台线程执行
 
-    def __init__(self, db_name: str):
+    def __init__(self, db_name='books_information.db'):
         """
         :param db_name: 数据库文件（如 'books_information.db'）
         """
         super().__init__()
         self.db_name = db_name
 
-    def _execute_query(self, sql: str, params: tuple = ()) -> None:
+    def _execute_query(self, sql: str, params: tuple = ()) -> list[tuple] | str| None:
         """
         在工作线程中执行查询，创建独立连接，查完即关。
         查询结果为列表，每个元素是一个元组（包含书籍的名称、作者、路径等信息），
-        由Qt信号books_ready或query_error传递至主线程对应的方法中。
+        或者是错误信息（字符串）。
         """
         conn = sqlite3.connect(self.db_name)
         try:
@@ -337,16 +344,29 @@ class BookQueryWorker(QObject):
             cursor.execute(sql, params)
             result = cursor.fetchall()
             cursor.close()
-            self.books_ready.emit(result)
+            return result
         except Exception as e:
-            self.query_error.emit(str(e))
+            return str(e)
         finally:
             conn.close()
 
+    @Slot()
+    def fetch_initial_books(self):
+        """应用初始化时，查询数据库中所有书籍信息，并将书籍信息传递给主线程的_on_initial_books_ready方法"""
+        result = self._execute_query("SELECT * FROM books_information")
+        if result is not None:
+            self.initial_books_ready.emit(result)
+        else:
+            self.initial_books_error.emit("Failed to fetch initial books.")
+
     @Slot()     # 把方法注册到 Qt的元对象系统，确保跨线程排队调用时正确识别执行
     def fetch_all_books(self):
-        """查询全部书籍（在工作线程中执行）"""
-        self._execute_query("SELECT * FROM books_information")
+        """查询全部书籍（在工作线程中执行），传递结果至主线程的_on_books_loaded方法中"""
+        result = self._execute_query("SELECT * FROM books_information")
+        if result is not None:
+            self.books_ready.emit(result)
+        else:
+            self.query_error.emit("Failed to fetch books.")
 
     def fetch_books_by_type(self, book_type: str):
         """按类型查询（预留，待后续接入分类筛选功能）"""
