@@ -29,7 +29,7 @@ class CoverCardModel(QAbstractListModel):
     
     def data(self, index, role=Qt.DisplayRole):
         """
-        View 请求第 index.row() 条数据的 role 角色的值。View 会在需要绘制某个条目时调用这个方法。
+        View 请求第 index.test_row() 条数据的 role 角色的值。View 会在需要绘制某个条目时调用这个方法。
         例如：View 说"给我第 42 个条目的 DisplayRole"，就返回书名字符串。
         """
         if not index.isValid():

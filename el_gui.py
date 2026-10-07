@@ -285,7 +285,7 @@ class MainWindow(QMainWindow):
 
     def _on_cover_card_clicked(self, index) -> None:
         """点击封面卡片"""
-        book = self.cover_model.get_book(index.row())
+        book = self.cover_model.get_book(index.test_row())
         if book:
             self.statusbar.showMessage(f"{book['name']}")
 
@@ -334,13 +334,13 @@ class MainWindow(QMainWindow):
             self._translate("Views", f"已刷新，共 {len(books)} 本书")
         )
 
-    # def _on_category_changed(self, row: int) -> None:
+    # def _on_category_changed(self, test_row: int) -> None:
     #     """左侧分类选择变化时触发"""
     #     # TODO：目前此方法不方便同时进行多项筛选，后续需优化
     #     categories = ["全部", "按书籍类型", "按阅读状态", "按作者"]
-    #     if row < 0 or row >= len(categories):
+    #     if test_row < 0 or test_row >= len(categories):
     #         return
-    #     category = categories[row]
+    #     category = categories[test_row]
     #     self.statusbar.showMessage(self._translate("Views", f"已选择分类：{category}"))
     #     if category == "全部":
     #         books = self.db.get_all_books()

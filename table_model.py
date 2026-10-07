@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import typing
+
 from PySide6.QtCore import (
     QAbstractTableModel,
     QModelIndex,
@@ -17,13 +21,14 @@ class BookTableModel(QAbstractTableModel):
 
     def __init__(self, column_titles=None, parent=None):
         super().__init__(parent)
-        self._table_books = []  # 存储书籍数据的列表，每个元素是一个字典，包含书籍的各个字段
+        self._table_books = []  # 每一行都是可编辑的字段列表
         self._column_titles = column_titles or []
 
     def set_data(self, books):
         """设置表格的数据源"""
         self.beginResetModel()
-        self._table_books = books
+        # sqlite3 查询结果的每一行是 tuple，需要复制成 list 才能支持编辑。
+        self._table_books = [list(book) for book in books]
         self.endResetModel()
 
     def rowCount(self, parent=QModelIndex()):
@@ -39,19 +44,23 @@ class BookTableModel(QAbstractTableModel):
         if not index.isValid():
             return None
 
-        # TODO：从数据库返回的数据为元组形式，但自定义Role中使用了.get()，delegate后续使用这些Role会出错
+        row = index.row()
+        column = index.column()
+        if not (0 <= row < self.rowCount() and 0 <= column < self.columnCount()):
+            return None
+
         if role == Qt.DisplayRole:
-            return self._table_books[index.row()][index.column()]
+            return self._table_books[row][column]
         elif role == self.BookIdRole:
-            return self._table_books[index.row()].get("id")
+            return self._table_books[row][0]
         elif role == self.BookNameRole:
-            return self._table_books[index.row()].get("name", "")
+            return self._table_books[row][1]
         elif role == self.AuthorRole:
-            return self._table_books[index.row()].get("author", "")
+            return self._table_books[row][4]
         elif role == self.BookTypeRole:
-            return self._table_books[index.row()].get("type", "")
+            return self._table_books[row][11]
         elif role == self.CoverPathRole:
-            return self._table_books[index.row()].get("cover_path")
+            return None
 
         return None
 
@@ -65,3 +74,30 @@ class BookTableModel(QAbstractTableModel):
                 # 垂直方向时，返回行号（从1开始）
                 return str(section + 1)
         return None
+
+    def setData(self, index, value: typing.Any, /, role: int = Qt.ItemDataRole.EditRole) -> bool:
+        if not index.isValid():
+            return False
+
+        row = index.row()
+        column = index.column()
+        if (
+                role != Qt.EditRole
+                or not (0 <= row < self.rowCount())
+                or not (0 <= column < self.columnCount())
+        ):
+            return False
+
+        self._table_books[row][column] = value
+        # 两个index分别表示左上角单元格、右下角单元格，Qt.DisplayRole：用于显示的内容发生变化；Qt.EditRole：用于编辑的内容发生变化。
+        self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
+        return True
+
+    def flags(self, index):
+        """返回指定单元格的标志，表示该单元格是否可编辑、可选中等"""
+        if not index.isValid():
+            return None
+        flag = super().flags(index)
+        # 设置单元格为可编辑
+        flag = flag | Qt.ItemIsEditable
+        return flag

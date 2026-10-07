@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>阶段 0：统一书籍数据结构实施指南</title>
+<style>
+  @page { size: A4; margin: 15mm 14mm 17mm; }
+  :root {
+    --text: #263238; --muted: #607d8b; --blue: #1565c0; --blue-bg: #e3f2fd;
+    --green: #2e7d32; --green-bg: #e8f5e9; --orange: #ef6c00; --orange-bg: #fff3e0;
+    --red: #c62828; --red-bg: #ffebee; --line: #cfd8dc; --code: #f5f7f9;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
+         color: var(--text); line-height: 1.75; font-size: 10.5pt; }
+  h1 { font-size: 25pt; color: #0d47a1; line-height: 1.25; margin: 0 0 8pt; }
+  h2 { font-size: 17pt; color: #0d47a1; border-bottom: 2px solid #90caf9;
+       padding-bottom: 4pt; margin: 22pt 0 9pt; page-break-after: avoid; }
+  h3 { font-size: 12.5pt; color: #37474f; margin: 15pt 0 5pt; page-break-after: avoid; }
+  h4 { color: #455a64; margin: 10pt 0 4pt; }
+  p { margin: 5pt 0 8pt; }
+  li { margin: 2pt 0; }
+  code { font: 9pt Consolas, "Cascadia Code", monospace; background: var(--code);
+         padding: 1px 4px; border-radius: 3px; }
+  pre { background: #263238; color: #eceff1; padding: 10pt 12pt; border-radius: 5pt;
+        font: 8.5pt/1.55 Consolas, "Cascadia Code", monospace; white-space: pre-wrap;
+        page-break-inside: avoid; overflow-wrap: anywhere; }
+  table { width: 100%; border-collapse: collapse; margin: 8pt 0 12pt; page-break-inside: avoid; }
+  th, td { border: 1px solid var(--line); padding: 6pt 7pt; vertical-align: top; }
+  th { background: #eceff1; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  .cover { min-height: 245mm; display: flex; flex-direction: column; justify-content: center;
+           padding: 18mm; background: linear-gradient(145deg, #e3f2fd, #ffffff 58%, #e8f5e9);
+           border: 1px solid #bbdefb; }
+  .subtitle { font-size: 14pt; color: var(--muted); margin-bottom: 20pt; }
+  .meta { border-top: 1px solid #90caf9; padding-top: 10pt; color: var(--muted); }
+  .notice, .warning, .success { padding: 9pt 12pt; border-left: 4px solid; margin: 9pt 0;
+                                page-break-inside: avoid; }
+  .notice { background: var(--blue-bg); border-color: var(--blue); }
+  .warning { background: var(--orange-bg); border-color: var(--orange); }
+  .success { background: var(--green-bg); border-color: var(--green); }
+  .danger { background: var(--red-bg); border-color: var(--red); }
+  .step { border: 1px solid var(--line); border-left: 5px solid var(--blue);
+          padding: 8pt 11pt; margin: 11pt 0; page-break-inside: avoid; }
+  .step-title { font-weight: bold; font-size: 12pt; color: #0d47a1; }
+  .checklist { list-style: none; padding-left: 0; }
+  .checklist li::before { content: "□ "; color: var(--blue); font-weight: bold; }
+  .diagram { border: 1px solid var(--line); background: #fcfdfe; padding: 10pt;
+             margin: 10pt 0 13pt; page-break-inside: avoid; }
+  .diagram-title { font-weight: bold; color: #455a64; margin-bottom: 8pt; }
+  .flow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 7pt; }
+  .box { border: 1.5px solid #78909c; border-radius: 5pt; padding: 7pt 9pt;
+         text-align: center; min-width: 108pt; background: white; }
+  .box.blue { background: var(--blue-bg); border-color: var(--blue); }
+  .box.green { background: var(--green-bg); border-color: var(--green); }
+  .box.orange { background: var(--orange-bg); border-color: var(--orange); }
+  .arrow { color: #607d8b; font-size: 18pt; }
+  .small { color: var(--muted); font-size: 9pt; }
+  .page-break { page-break-before: always; }
+  .footer { color: #78909c; font-size: 8.5pt; border-top: 1px solid var(--line);
+            margin-top: 18pt; padding-top: 5pt; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>阶段 0：统一书籍数据结构</h1>
+  <div class="subtitle">Eternity-Library 数据库线程化重构的第一步</div>
+  <p>本教程不进行线程重构，也不改变数据库读写职责。我们先解决一个更基础、也更容易被忽略的问题：数据库返回的是元组，表格模型把它变成列表，封面模型又按元组下标读取，多个模块对“一本书长什么样”没有统一约定。</p>
+  <div class="notice"><b>本次操作范围：</b>你将手动新增 <code>book_record.py</code>，然后手动修改两个 Model 和部分查询代码。本文只提供步骤和可运行代码，我不会直接修改项目源码。</div>
+  <div class="meta">
+    <p><b>适合对象：</b>非计算机专业、正在通过项目学习 Python/PySide6 的业余开发者</p>
+    <p><b>本阶段目标：</b>所有模块使用同一种 <code>BookRecord</code> 表示书籍；数据库列名、列顺序和中文表头集中管理。</p>
+    <p><b>完成标准：</b>应用可以启动，已有查询和两个视图仍能显示，单独测试脚本可以读取并打印书籍数据。</p>
+  </div>
+</section>
+
+<h2>1. 阶段 0 到底要解决什么</h2>
+<p>目前数据库表有 19 个字段：</p>
+<table>
+  <tr><th>位置</th><th>数据库字段</th><th>含义</th></tr>
+  <tr><td>0</td><td><code>book_id</code></td><td>书籍 ID</td></tr>
+  <tr><td>1</td><td><code>book_name</code></td><td>书名</td></tr>
+  <tr><td>2</td><td><code>book_path</code></td><td>本地路径</td></tr>
+  <tr><td>3</td><td><code>add_time</code></td><td>加入时间</td></tr>
+  <tr><td>4</td><td><code>author</code></td><td>作者</td></tr>
+  <tr><td>5</td><td><code>nationality</code></td><td>作者国籍</td></tr>
+  <tr><td>6</td><td><code>translator</code></td><td>译者</td></tr>
+  <tr><td>7</td><td><code>publisher</code></td><td>出版社</td></tr>
+  <tr><td>8</td><td><code>publication_date</code></td><td>出版日期</td></tr>
+  <tr><td>9</td><td><code>level</code></td><td>书籍等级</td></tr>
+  <tr><td>10</td><td><code>read_status</code></td><td>阅读状态</td></tr>
+  <tr><td>11</td><td><code>book_type</code></td><td>书籍类型</td></tr>
+  <tr><td>12</td><td><code>isbn</code></td><td>ISBN</td></tr>
+  <tr><td>13</td><td><code>pages</code></td><td>页数</td></tr>
+  <tr><td>14</td><td><code>read_progress</code></td><td>阅读进度</td></tr>
+  <tr><td>15</td><td><code>read_time</code></td><td>阅读时间</td></tr>
+  <tr><td>16</td><td><code>read_date</code></td><td>阅读日期</td></tr>
+  <tr><td>17</td><td><code>read_link</code></td><td>阅读链接</td></tr>
+  <tr><td>18</td><td><code>introduction</code></td><td>简介</td></tr>
+</table>
+
+<p>现在不同代码使用不同方式表示一本书：</p>
+<ul>
+  <li><code>BookQueryWorker</code> 查询结果：<code>list[tuple]</code>。</li>
+  <li><code>BookTableModel</code>：当前代码会把每个元组复制成 <code>list</code>，用于编辑单元格。</li>
+  <li><code>CoverCardModel</code>：把元组转换成只包含少数字段的 <code>dict</code>。</li>
+  <li><code>DatabaseManager</code> 写入时：使用任意关键字参数字典。</li>
+</ul>
+
+<div class="diagram">
+  <div class="diagram-title">阶段 0 完成后的数据流</div>
+  <div class="flow">
+    <div class="box orange">SQLite 查询结果<br><span class="small">tuple</span></div>
+    <div class="arrow">→</div>
+    <div class="box green">BookRecord<br><span class="small">统一的数据对象</span></div>
+    <div class="arrow">→</div>
+    <div class="box blue">TableModel<br>CoverCardModel</div>
+    <div class="arrow">→</div>
+    <div class="box blue">Qt View<br><span class="small">表格/封面</span></div>
+  </div>
+</div>
+
+<div class="success"><b>为什么先做这个：</b>如果不先统一数据结构，后面把查询移动到工作线程时，信号传回来的数据格式仍然混乱；线程问题、模型问题和字段下标问题会同时出现，排错会非常困难。</div>
+
+<h2>2. 设计决定：新增一个简单的数据结构模块</h2>
+<p>我们新增文件 <code>book_record.py</code>，里面只放四类内容：</p>
+<ol>
+  <li>数据库字段名的固定顺序。</li>
+  <li>字段对应的中文表头。</li>
+  <li><code>BookRecord</code> 数据类。</li>
+  <li>把 SQLite 查询行转换为 <code>BookRecord</code> 的函数。</li>
+</ol>
+
+<p>这里使用 Python 的 <code>dataclass</code>。它可以理解为“自动帮我们生成初始化方法的数据容器”。它不是数据库，也不是线程，也不会自动做复杂事情，适合当前的学习阶段。</p>
+
+<div class="warning"><b>为什么不继续使用数字下标：</b><code>book[11]</code> 只有作者记得第 11 列是什么时才安全。一旦数据库增加列、查询列顺序改变，程序可能不报错但显示错误数据。使用 <code>book.book_type</code> 更容易阅读和检查。</div>
+
+<h2>3. 第一步：新增 book_record.py</h2>
+<div class="step">
+  <div class="step-title">操作 1：在项目根目录新建文件</div>
+  <p>在 <code>D:\Eternity-Library</code> 下新建文件，文件名必须是：</p>
+  <pre>book_record.py</pre>
+  <p>将下面的完整代码复制进去并保存。这个文件是可以直接运行的 Python 代码，不是伪代码。</p>
+</div>
+
+<pre>from __future__ import annotations
+
+from dataclasses import dataclass, fields
+from typing import Any, Iterable, Sequence
+
+
+# 这个顺序必须与 database.py 中 CREATE TABLE 的字段顺序一致。
+BOOK_COLUMNS: tuple[str, ...] = (
+    "book_id",
+    "book_name",
+    "book_path",
+    "add_time",
+    "author",
+    "nationality",
+    "translator",
+    "publisher",
+    "publication_date",
+    "level",
+    "read_status",
+    "book_type",
+    "isbn",
+    "pages",
+    "read_progress",
+    "read_time",
+    "read_date",
+    "read_link",
+    "introduction",
+)
+
+
+# 列名和中文表头必须一一对应，长度也必须相同。
+BOOK_COLUMN_TITLES: tuple[str, ...] = (
+    "书籍ID",
+    "书籍名称",
+    "书籍路径",
+    "添加时间",
+    "作者",
+    "国籍",
+    "译者",
+    "出版社",
+    "出版日期",
+    "书籍等级",
+    "阅读状态",
+    "书籍类型",
+    "ISBN",
+    "页数",
+    "阅读进度",
+    "阅读时间",
+    "阅读日期",
+    "阅读链接",
+    "简介",
+)
+
+
+if len(BOOK_COLUMNS) != len(BOOK_COLUMN_TITLES):
+    raise RuntimeError("书籍字段数量与中文表头数量不一致")
+
+
+@dataclass
+class BookRecord:
+    """表示数据库中的一条书籍记录。"""
+
+    book_id: int | None = None
+    book_name: str = ""
+    book_path: str | None = None
+    add_time: str | None = None
+    author: str | None = None
+    nationality: str | None = None
+    translator: str | None = None
+    publisher: str | None = None
+    publication_date: str | None = None
+    level: str | None = None
+    read_status: str | None = None
+    book_type: str | None = None
+    isbn: int | None = None
+    pages: int | None = None
+    read_progress: str | None = None
+    read_time: float | None = None
+    read_date: str | None = None
+    read_link: str | None = None
+    introduction: str | None = None
+
+    @classmethod
+    def from_row(cls, row: Sequence[Any]) -> "BookRecord":
+        """把 SQLite 返回的一行数据转换成 BookRecord。"""
+        if len(row) != len(BOOK_COLUMNS):
+            raise ValueError(
+                f"书籍记录应有 {len(BOOK_COLUMNS)} 个字段，实际收到 {len(row)} 个"
+            )
+        return cls(*row)
+
+    @classmethod
+    def from_mapping(cls, values: dict[str, Any]) -> "BookRecord":
+        """从字段字典创建 BookRecord，适合扫描结果转成统一对象。"""
+        unknown_keys = set(values) - set(BOOK_COLUMNS)
+        if unknown_keys:
+            names = ", ".join(sorted(unknown_keys))
+            raise ValueError(f"发现未知书籍字段：{names}")
+
+        allowed_values = {
+            field.name: values[field.name]
+            for field in fields(cls)
+            if field.name in values
+        }
+        return cls(**allowed_values)
+
+    def to_row(self) -> tuple[Any, ...]:
+        """按数据库字段顺序转换为可用于 INSERT 的元组。"""
+        return tuple(getattr(self, column) for column in BOOK_COLUMNS)
+
+    def to_mapping(self) -> dict[str, Any]:
+        """转换为字段名到字段值的字典。"""
+        return {
+            column: getattr(self, column)
+            for column in BOOK_COLUMNS
+        }
+
+
+def rows_to_records(rows: Iterable[Sequence[Any]]) -> list[BookRecord]:
+    """把多行 SQLite 查询结果转换成 BookRecord 列表。"""
+    return [BookRecord.from_row(row) for row in rows]</pre>
+
+<h3>代码逐段解释</h3>
+<table>
+  <tr><th>代码</th><th>作用</th></tr>
+  <tr><td><code>BOOK_COLUMNS</code></td><td>集中记录字段顺序，后续 SQL、表头和数据转换都可以引用它。</td></tr>
+  <tr><td><code>BookRecord</code></td><td>一条书籍记录；每个属性对应数据库中的一列。</td></tr>
+  <tr><td><code>from_row()</code></td><td>把 SQLite 的元组转换成有名字的对象，并检查字段数量。</td></tr>
+  <tr><td><code>from_mapping()</code></td><td>把扫描模块产生的字典转换成统一对象，并拒绝未知字段。</td></tr>
+  <tr><td><code>to_row()</code></td><td>写入数据库时按固定顺序生成元组。</td></tr>
+  <tr><td><code>to_mapping()</code></td><td>需要动态生成 INSERT 列名时，转换回字典。</td></tr>
+</table>
+
+<div class="step">
+  <div class="step-title">操作 2：先单独运行这个文件</div>
+  <p>打开 PowerShell，进入项目目录，执行：</p>
+  <pre>cd D:\Eternity-Library
+python -c "from book_record import BookRecord, BOOK_COLUMNS; book = BookRecord(book_name='测试书'); print(book.book_name); print(len(BOOK_COLUMNS)); print(book.to_mapping())"</pre>
+  <p>预期结果中应出现 <code>测试书</code>、数字 <code>19</code>，以及一个包含 19 个字段的字典。没有错误信息就说明基础数据结构可以导入。</p>
+</div>
+
+<h2>4. 第二步：为数据库查询增加统一转换</h2>
+<p>这一小步仍然不涉及线程。先让现有的 <code>BookQueryWorker</code> 在查询完成后把元组转换为 <code>BookRecord</code>。这样之后的 Model 和新线程 Worker 都可以使用同一种数据。</p>
+
+<div class="step">
+  <div class="step-title">操作 3：修改 database.py 的 import 区域</div>
+  <p>打开 <code>database.py</code>，在现有 import 后面加入：</p>
+  <pre>from book_record import (
+    BOOK_COLUMNS,
+    BOOK_COLUMN_TITLES,
+    BookRecord,
+    rows_to_records,
+)</pre>
+  <p>如果编辑器提示导入未使用，暂时不用担心；接下来几步会使用这些名称。</p>
+</div>
+
+<div class="step">
+  <div class="step-title">操作 4：替换 BookQueryWorker 的类型和转换部分</div>
+  <p>在 <code>BookQueryWorker</code> 中，将原来的 <code>_execute_query</code> 方法整体替换为下面代码：</p>
+  <pre>def _execute_query(
+    self,
+    sql: str,
+    params: tuple = (),
+) -> list[tuple] | None:
+    """
+    在工作线程中执行查询，返回 SQLite 原始行。
+    查询失败时返回 None，具体错误由 query_error 发出。
+    """
+    conn = sqlite3.connect(self.db_name)
+    try:
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        result = cursor.fetchall()
+        cursor.close()
+        return result
+    except sqlite3.Error as error:
+        self.query_error.emit(str(error))
+        return None
+    finally:
+        conn.close()</pre>
+
+  <p>然后，把 <code>fetch_all_books</code> 整个方法替换为：</p>
+  <pre>@Slot()
+def fetch_all_books(self):
+    """查询全部书籍，并把每一行转换为 BookRecord。"""
+    result = self._execute_query(
+        "SELECT * FROM books_information ORDER BY book_id"
+    )
+    if result is None:
+        return
+
+    try:
+        books = rows_to_records(result)
+    except (TypeError, ValueError) as error:
+        self.query_error.emit(f"书籍数据格式错误：{error}")
+        return
+
+    self.books_ready.emit(books)</pre>
+
+  <p>同时，把类顶部的信号注释调整为以下形式：</p>
+  <pre>books_ready = Signal(list)      # list[BookRecord]
+query_error = Signal(str)
+trigger_fetch = Signal()</pre>
+</div>
+
+<div class="warning"><b>为什么把错误改成 None：</b>原代码允许 <code>_execute_query()</code> 返回字符串错误信息，但调用方只判断“是不是 None”。这样字符串可能被当作正常列表传给界面。现在错误立即通过 <code>query_error</code> 发出，成功结果永远是记录列表，含义更清楚。</div>
+
+<h3>处理空数据库</h3>
+<p>注意：空数据库查询成功时，<code>result</code> 是空列表，不是 <code>None</code>。所以必须继续发出 <code>books_ready([])</code>。界面层以后应该清空 Model，而不是直接 <code>if not books: return</code> 保留旧画面。</p>
+
+<h2>5. 第三步：让表格模型使用 BookRecord</h2>
+<p>你当前的 <code>table_model.py</code> 已经有未提交修改：它会把查询元组复制成列表，以便编辑单元格。这个修改不要覆盖。阶段 0 需要做的是，在保留编辑能力的前提下，明确每一行是 <code>BookRecord</code> 还是可编辑列表。</p>
+
+<p>为了不在本阶段同时设计“编辑后保存数据库”，这里采用一个容易理解的规则：</p>
+<ul>
+  <li>数据库查询结果在进入 Model 前是 <code>BookRecord</code>。</li>
+  <li>表格 Model 内部仍然保存可编辑的列表，因为当前 <code>setData()</code> 需要修改单元格。</li>
+  <li>列表由 <code>BookRecord.to_row()</code> 生成，不再依赖查询结果本身恰好是元组。</li>
+</ul>
+
+<div class="step">
+  <div class="step-title">操作 5：修改 table_model.py 的 import</div>
+  <p>在现有 PySide6 import 后加入：</p>
+  <pre>from book_record import BOOK_COLUMN_TITLES, BookRecord</pre>
+</div>
+
+<div class="step">
+  <div class="step-title">操作 6：替换 BookTableModel.__init__ 和 set_data</div>
+  <p>将 <code>__init__</code> 改为：</p>
+  <pre>def __init__(self, column_titles=None, parent=None):
+    super().__init__(parent)
+    self._table_books: list[list[object]] = []
+    self._column_titles = column_titles or list(BOOK_COLUMN_TITLES)</pre>
+  <p>将 <code>set_data</code> 改为：</p>
+  <pre>def set_data(self, books: list[BookRecord]):
+    """把 BookRecord 列表转换成表格内部可编辑的二维列表。"""
+    self.beginResetModel()
+    self._table_books = [
+        list(book.to_row())
+        for book in books
+    ]
+    self.endResetModel()</pre>
+</div>
+
+<div class="step">
+  <div class="step-title">操作 7：检查 data() 中的字段位置</div>
+  <p>你当前的 <code>data()</code> 使用 0、1、4、11 这些位置作为自定义 Role，这些位置与数据库字段顺序一致，可以暂时保留。为了让代码更容易学习，建议把文件顶部增加下面的常量：</p>
+  <pre>BOOK_ID_INDEX = 0
+BOOK_NAME_INDEX = 1
+AUTHOR_INDEX = 4
+BOOK_TYPE_INDEX = 11</pre>
+  <p>然后把相应代码改成：</p>
+  <pre>elif role == self.BookIdRole:
+    return self._table_books[row][BOOK_ID_INDEX]
+elif role == self.BookNameRole:
+    return self._table_books[row][BOOK_NAME_INDEX]
+elif role == self.AuthorRole:
+    return self._table_books[row][AUTHOR_INDEX]
+elif role == self.BookTypeRole:
+    return self._table_books[row][BOOK_TYPE_INDEX]</pre>
+  <p>这一步不是最终方案。阶段 1 可以进一步改成按属性读取，或者让表格 Model 直接保存 <code>BookRecord</code> 并单独管理编辑值。当前目标是先保证数据转换路径清晰且可以运行。</p>
+</div>
+
+<h2>6. 第四步：让封面模型使用 BookRecord</h2>
+<p>封面模型是目前最明显的“数据格式转换点”：它现在接收元组后使用 <code>b[0]</code>、<code>b[1]</code>、<code>b[4]</code>、<code>b[11]</code>。改成属性访问后，读代码时可以直接知道每个值是什么。</p>
+
+<div class="step">
+  <div class="step-title">操作 8：修改 cover_model.py 的 import</div>
+  <p>加入：</p>
+  <pre>from book_record import BookRecord</pre>
+</div>
+
+<div class="step">
+  <div class="step-title">操作 9：替换 set_books 方法</div>
+  <p>把 <code>CoverCardModel.set_books</code> 整个替换为：</p>
+  <pre>def set_books(self, books: list[BookRecord]):
+    """
+    批量替换全部数据。
+    Model 位于主线程，只有主线程收到查询结果后才能调用此方法。
+    """
+    self.beginResetModel()
+    self._books = [
+        {
+            "id": book.book_id,
+            "name": book.book_name or "未知书名",
+            "path": book.book_path,
+            "author": book.author or "未知作者",
+            "type": book.book_type or "未知类型",
+            "cover_path": None,
+        }
+        for book in books
+    ]
+    self.endResetModel()</pre>
+  <p>这样封面模型仍保存适合界面显示的字典，但字典的来源已经明确是 <code>BookRecord</code>，而不是依赖数字下标。</p>
+</div>
+
+<h2>7. 第五步：修改 MainWindow 的表头来源</h2>
+<p>当前 <code>MainWindow.__init__</code> 创建了一个临时的 <code>BookQueryWorker</code>，并调用同步的 <code>column_titles_translation()</code> 获取表头。阶段 0 可以先把表头移到统一模块，避免为了 19 个固定文字额外打开一次数据库连接。</p>
+
+<div class="step">
+  <div class="step-title">操作 10：修改 el_gui.py 的 import</div>
+  <p>在 import 区域加入：</p>
+  <pre>from book_record import BOOK_COLUMN_TITLES</pre>
+</div>
+
+<div class="step">
+  <div class="step-title">操作 11：修改 MainWindow.__init__ 中的表头初始化</div>
+  <p>找到：</p>
+  <pre>self.db = BookQueryWorker()
+self.column_titles = self.db.column_titles_translation()</pre>
+  <p>替换为：</p>
+  <pre>self.column_titles = list(BOOK_COLUMN_TITLES)</pre>
+  <p>暂时不要删除下面的 <code>self._book_worker = BookQueryWorker()</code>，因为它仍然是实际执行查询的 Worker。阶段 1 统一读写线程时再处理它。</p>
+</div>
+
+<div class="warning"><b>重要：</b>这一步之后，<code>BookQueryWorker.column_titles()</code> 和 <code>column_titles_translation()</code> 暂时可以保留，避免一次改太多；但它们已经不再被 MainWindow 使用。等阶段 0 验证完成后，可以在阶段 1 再删除旧接口。</div>
+
+<h2>8. 第六步：修改 MainWindow 的结果处理类型</h2>
+<p>因为 <code>books_ready</code> 现在传回 <code>list[BookRecord]</code>，<code>_on_books_loaded</code> 的注释和空列表处理应该同步调整。</p>
+
+<div class="step">
+  <div class="step-title">操作 12：替换 _on_books_loaded</div>
+  <p>在 <code>el_gui.py</code> 中，将现有方法替换为：</p>
+  <pre>def _on_books_loaded(self, books: list[BookRecord]) -> None:
+    """收到后台查询结果，在主线程更新缓存和两个 Model。"""
+    self._books_cache = books
+    self._cache_timestamp = time.time()
+
+    # 空列表也是一次成功查询，必须清空旧数据显示。
+    self.cover_model.set_books(books)
+    self.table_model.set_data(books)
+
+    if books:
+        message = self._translate(
+            "Views",
+            f"已刷新，共 {len(books)} 本书",
+        )
+    else:
+        message = self._translate("Views", "数据库中暂无书籍")
+    self.statusbar.showMessage(message)</pre>
+  <p>同时，在 el_gui.py 的 import 区域加入：</p>
+  <pre>from book_record import BookRecord</pre>
+</div>
+
+<p>现有缓存变量也会变成 <code>list[BookRecord] | None</code>。这不会改变缓存的基本逻辑，只是让缓存中的数据格式明确。</p>
+
+<h2>9. 第七步：让扫描数据也可以转换</h2>
+<p>当前 <code>books.py</code> 的扫描结果是字典，随后直接传给 <code>DatabaseManager.add_book(**i)</code>。阶段 0 不要求现在就迁移写入线程，但可以先验证扫描字典是否符合统一字段。</p>
+
+<div class="step">
+  <div class="step-title">操作 13：在 books.py 中增加一次转换测试</div>
+  <p>先在 <code>books.py</code> 的 import 区域加入：</p>
+  <pre>from book_record import BookRecord</pre>
+  <p>然后在 <code>write_into_database</code> 开头暂时加入下面代码：</p>
+  <pre>def write_into_database(self, scan_info):
+    """将扫描结果写入数据库"""
+    records = [
+        BookRecord.from_mapping(book_info)
+        for book_info in scan_info
+    ]
+
+    db = DatabaseManager()
+    for record in records:
+        db.add_book(**record.to_mapping())
+    db.close()</pre>
+  <p>这段代码可以直接运行，仍然使用原来的 <code>DatabaseManager</code> 写入方式，只是在写入前增加了字段检查和统一转换。</p>
+</div>
+
+<div class="warning"><b>可能遇到的错误是有用的：</b>如果扫描结果字典中有数据库没有的字段，程序会明确提示“发现未知书籍字段”；如果缺少某些字段，<code>BookRecord</code> 会使用默认值。这样比后面 SQL 才报错更容易定位。</div>
+
+<h2>10. 第八步：增加独立验证脚本</h2>
+<p>不要每次验证数据结构都启动完整 GUI。新增一个临时或长期保留的小脚本，可以快速检查数据库字段数量、查询结果转换和 Model 所需字段。</p>
+
+<div class="step">
+  <div class="step-title">操作 14：新建 verify_phase0.py</div>
+  <p>在项目根目录新建 <code>verify_phase0.py</code>，复制下面完整代码：</p>
+</div>
+
+<pre>import sqlite3
+
+from book_record import (
+    BOOK_COLUMNS,
+    BOOK_COLUMN_TITLES,
+    BookRecord,
+    rows_to_records,
+)
+
+
+DB_NAME = "books_information.db"
+
+
+def main() -> None:
+    print("1. 检查字段定义")
+    print(f"字段数量：{len(BOOK_COLUMNS)}")
+    print(f"表头数量：{len(BOOK_COLUMN_TITLES)}")
+    assert len(BOOK_COLUMNS) == 19
+    assert len(BOOK_COLUMNS) == len(BOOK_COLUMN_TITLES)
+
+    print("2. 读取数据库实际字段")
+    connection = sqlite3.connect(DB_NAME)
+    try:
+        rows = connection.execute(
+            "SELECT * FROM books_information ORDER BY book_id"
+        ).fetchall()
+    finally:
+        connection.close()
+
+    print(f"数据库记录数量：{len(rows)}")
+    if rows:
+        assert len(rows[0]) == len(BOOK_COLUMNS)
+        records = rows_to_records(rows)
+        first = records[0]
+        assert isinstance(first, BookRecord)
+        print(f"第一本书：{first.book_name}")
+        print(f"作者：{first.author or '未填写'}")
+        print(f"类型：{first.book_type or '未填写'}")
+        assert len(first.to_row()) == len(BOOK_COLUMNS)
+    else:
+        print("数据库目前没有书籍记录，空结果检查通过")
+
+    print("3. 检查字典转换")
+    demo = BookRecord.from_mapping({
+        "book_name": "阶段0测试书",
+        "author": "测试作者",
+        "book_type": "测试类型",
+    })
+    assert demo.book_name == "阶段0测试书"
+    assert demo.to_mapping()["author"] == "测试作者"
+    print("字典转换检查通过")
+
+    print("阶段 0 数据结构检查全部通过")
+
+
+if __name__ == "__main__":
+    main()</pre>
+
+<div class="step">
+  <div class="step-title">操作 15：运行验证脚本</div>
+  <pre>cd D:\Eternity-Library
+python verify_phase0.py</pre>
+  <p>如果数据库尚未创建，脚本会提示数据库或表不存在。这不是数据结构代码错误；先运行一次原项目，让它创建 <code>books_information.db</code> 和 <code>books_information</code> 表，再重新运行验证脚本。</p>
+</div>
+
+<h2>11. 第九步：按顺序启动项目验证</h2>
+<p>建议严格按下面顺序操作，每一步出现问题就先停下来解决，不要继续叠加修改。</p>
+<ol>
+  <li>运行 <code>python -c "from book_record import BookRecord; print(BookRecord(book_name='ok'))"</code>。</li>
+  <li>运行 <code>python verify_phase0.py</code>。</li>
+  <li>启动 <code>python el_gui.py</code>，确认窗口能打开。</li>
+  <li>确认表格模式的中文表头仍然显示。</li>
+  <li>确认数据库有书籍时，封面模式可以显示书名、作者和类型。</li>
+  <li>确认数据库为空时，界面不会保留上一次旧数据。</li>
+  <li>扫描一小个测试目录，确认书籍仍能写入数据库。</li>
+</ol>
+
+<h3>出现错误时如何判断</h3>
+<table>
+  <tr><th>错误现象</th><th>优先检查</th></tr>
+  <tr><td><code>ModuleNotFoundError: book_record</code></td><td><code>book_record.py</code> 是否在项目根目录，运行命令是否位于 <code>D:\Eternity-Library</code>。</td></tr>
+  <tr><td>字段数量不是 19</td><td>数据库表是否是旧版本；查询是否仍然是 <code>SELECT *</code>；<code>CREATE TABLE</code> 是否被手动改过。</td></tr>
+  <tr><td><code>BookRecord.from_row</code> 报字段数量错误</td><td>查询列数量和 <code>BOOK_COLUMNS</code> 不一致。检查是否只查询了部分列却仍调用 <code>from_row</code>。</td></tr>
+  <tr><td>表头数量或索引错误</td><td><code>BOOK_COLUMNS</code> 与 <code>BOOK_COLUMN_TITLES</code> 是否一一对应。</td></tr>
+  <tr><td>封面模式报 <code>tuple</code> 或属性错误</td><td><code>CoverCardModel.set_books</code> 是否已改成接收 <code>BookRecord</code>。</td></tr>
+  <tr><td>表格能显示但不能编辑</td><td><code>BookTableModel.set_data</code> 是否使用 <code>list(book.to_row())</code>，<code>setData()</code> 是否仍修改内部列表。</td></tr>
+  <tr><td>扫描入库报未知字段</td><td>打印扫描字典的 keys，判断是拼写错误还是确实需要新增数据库字段。</td></tr>
+</table>
+
+<h2>12. 阶段 0 完成检查表</h2>
+<ul class="checklist">
+  <li>已新增 <code>book_record.py</code>，且没有把数据类写入 <code>database.py</code>。</li>
+  <li><code>BOOK_COLUMNS</code> 包含 19 个字段，顺序与数据库表一致。</li>
+  <li><code>BOOK_COLUMN_TITLES</code> 与字段数量一致。</li>
+  <li>SQLite 查询结果可以转换为 <code>list[BookRecord]</code>。</li>
+  <li>错误不会再以字符串伪装成正常查询列表。</li>
+  <li>表格模型能把 <code>BookRecord</code> 转换成可编辑列表。</li>
+  <li>封面模型通过属性访问书名、作者和类型。</li>
+  <li>空查询结果会清空两个 Model。</li>
+  <li>扫描结果可以通过 <code>BookRecord.from_mapping()</code> 校验。</li>
+  <li>GUI 可以启动，查询、表头和封面显示没有回归问题。</li>
+  <li>没有修改线程模型；阶段 1 再开始统一 DatabaseWorker。</li>
+</ul>
+
+<h2>13. 阶段 0 之后，下一步是什么</h2>
+<p>完成本教程后，不要立即删除旧的 <code>DatabaseManager</code> 或 <code>BookQueryWorker</code>。阶段 0 的目的只是让它们使用统一的数据结构。下一阶段才是：</p>
+<ol>
+  <li>创建一个长期运行的 <code>DatabaseWorker</code>。</li>
+  <li>把 SQLite 连接的创建和关闭放到 Worker 所在线程。</li>
+  <li>让查询、写入、删除和更新都通过 Qt 信号槽请求。</li>
+  <li>让 Worker 发出 <code>list[BookRecord]</code>，主线程更新 Model。</li>
+</ol>
+
+<div class="success"><b>学习重点：</b>阶段 0 不是“为了增加一个文件而增加一个文件”，而是在建立项目中的共同语言。以后看到 <code>BookRecord</code>，就知道它代表一条完整书籍记录；看到 <code>list[BookRecord]</code>，就知道这是可以传递给界面 Model 的书籍列表。</div>
+
+<div class="footer">Eternity-Library guide · 阶段 0：统一书籍数据结构 · 本文只提供手动实施步骤，不修改项目源码</div>
+</body>
+</html>
