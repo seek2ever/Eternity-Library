@@ -5,6 +5,8 @@ from PySide6.QtCore import (
     Qt,
 )
 
+from book_record import BookRecord
+
 
 class CoverCardModel(QAbstractListModel):
     """书籍封面卡片的数据模型
@@ -56,22 +58,21 @@ class CoverCardModel(QAbstractListModel):
             return book.get("cover_path")
         return None
 
-    def set_books(self, books):
+    def set_books(self, books: list[BookRecord]):
         """
-        批量替换全部数据（数据库查询完成后调用）。
-        使用 beginResetModel/endResetModel 通知 View：数据全变了，请全部重绘。
+        批量替换全部数据。Model位于主线程，只有主线程收到查询结果后才能调用此方法。
         """
         self.beginResetModel()
         self._books = [
             {
-                "id": b[0],
-                "name": b[1] or "未知书名",
-                "path": b[2],
-                "author": b[4] or "未知作者",
-                "type": b[11] or "未知类型",
-                "cover_path": None,  # 预留，后续填真实封面路径
+                "id": book.book_id,
+                "name": book.book_name or "未知书名",
+                "path": book.book_path,
+                "author": book.author or "未知作者",
+                "type": book.book_type or "未知类型",
+                "cover_path": None,
             }
-            for b in books
+            for book in books
         ]
         self.endResetModel()
 

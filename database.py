@@ -9,6 +9,13 @@ from PySide6.QtCore import (
     Slot,
 )
 
+from book_record import(
+    BOOK_COLUMNS,
+    BOOK_COLUMN_TITLES,
+    BookRecord,
+    rows_to_records,
+)
+
 
 class DatabaseManager(QObject):
     """负责在主线程中与SQLite数据库交互，提供书籍信息的增删改查功能"""
@@ -242,7 +249,7 @@ class BookQueryWorker(QObject):
     """
 
     # 应用运行中查询时所用信号
-    books_ready = Signal(list)      # 查询成功，携带书籍列表
+    books_ready = Signal(list)      # 查询成功，携带书籍列表list[BookRecord]
     query_error = Signal(str)       # 查询失败，携带错误信息
     trigger_fetch = Signal()        # 触发 fetch_all_books 在后台线程执行
 
@@ -253,11 +260,10 @@ class BookQueryWorker(QObject):
         super().__init__()
         self.db_name = db_name
 
-    def _execute_query(self, sql: str, params: tuple = ()) -> list[tuple] | str| None:
+    def _execute_query(self, sql: str, params: tuple = ()) -> list[tuple] | None:
         """
-        在工作线程中执行查询，创建独立连接，查完即关。
-        查询结果为列表，每个元素是一个元组（包含书籍的名称、作者、路径等信息），
-        或者是错误信息（字符串）。
+        在工作线程中执行查询，返回 SQLite 原始行。
+        查询失败时返回 None，具体错误由 query_error 发出。
         """
         conn = sqlite3.connect(self.db_name)
         try:
@@ -266,22 +272,28 @@ class BookQueryWorker(QObject):
             result = cursor.fetchall()
             cursor.close()
             return result
-        except Exception as e:
-            return str(e)
+        except sqlite3.Error as error:
+            self.query_error.emit(str(error))
+            return None
         finally:
             conn.close()
 
     @Slot()     # 把方法注册到 Qt的元对象系统，确保跨线程排队调用时正确识别执行
     def fetch_all_books(self):
-        """
-        查询全部书籍（在工作线程中执行），传递结果至主线程的_on_books_loaded方法中
-        例如：(7965672015, '中国科学技术史 天文学卷', 'F:/Books', '2024年04月18日 23:49:50', None, ..., None)
-        """
-        result = self._execute_query("SELECT * FROM books_information")
-        if result is not None:
-            self.books_ready.emit(result)
-        else:
-            self.query_error.emit("Failed to fetch books.")
+        """查询全部书籍，并把每一行转换为 BookRecord。"""
+        result = self._execute_query(
+            "SELECT * FROM books_information ORDER BY book_id"
+        )
+        if result is None:
+            return
+
+        try:
+            books = rows_to_records(result)
+        except (TypeError, ValueError) as error:
+            self.query_error.emit(f"书籍数据格式错误：{error}")
+            return
+
+        self.books_ready.emit(books)
 
     def fetch_books_by_type(self, book_type: str):
         """按类型查询（预留，待后续接入分类筛选功能）"""

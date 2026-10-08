@@ -8,6 +8,16 @@ from PySide6.QtCore import (
     Qt,
 )
 
+from book_record import (
+    BOOK_COLUMN_TITLES,
+    BookRecord,
+)
+
+BOOK_ID_INDEX = 0
+BOOK_NAME_INDEX = 1
+AUTHOR_INDEX = 4
+BOOK_TYPE_INDEX = 11
+
 
 class BookTableModel(QAbstractTableModel):
     """表格视图的数据模型"""
@@ -21,14 +31,16 @@ class BookTableModel(QAbstractTableModel):
 
     def __init__(self, column_titles=None, parent=None):
         super().__init__(parent)
-        self._table_books = []  # 每一行都是可编辑的字段列表
-        self._column_titles = column_titles or []
+        self._table_books: list[list[object]] = []
+        self._column_titles = column_titles or list(BOOK_COLUMN_TITLES)
 
-    def set_data(self, books):
-        """设置表格的数据源"""
+    def set_data(self, books: list[BookRecord]):
+        """把BookRecord列表转换成表格内部可编辑的二维列表。"""
         self.beginResetModel()
-        # sqlite3 查询结果的每一行是 tuple，需要复制成 list 才能支持编辑。
-        self._table_books = [list(book) for book in books]
+        self._table_books = [
+            list(book.to_row())
+            for book in books
+        ]
         self.endResetModel()
 
     def rowCount(self, parent=QModelIndex()):
@@ -52,13 +64,13 @@ class BookTableModel(QAbstractTableModel):
         if role == Qt.DisplayRole:
             return self._table_books[row][column]
         elif role == self.BookIdRole:
-            return self._table_books[row][0]
+            return self._table_books[row][BOOK_ID_INDEX]
         elif role == self.BookNameRole:
-            return self._table_books[row][1]
+            return self._table_books[row][BOOK_NAME_INDEX]
         elif role == self.AuthorRole:
-            return self._table_books[row][4]
+            return self._table_books[row][AUTHOR_INDEX]
         elif role == self.BookTypeRole:
-            return self._table_books[row][11]
+            return self._table_books[row][BOOK_TYPE_INDEX]
         elif role == self.CoverPathRole:
             return None
 
