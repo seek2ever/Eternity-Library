@@ -7,7 +7,7 @@ import os
 import sys
 import time
 
-import fitz
+import pymupdf as pdf
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog, QVBoxLayout, QMessageBox
 
@@ -218,7 +218,7 @@ class PDFBooks(Books):
     def get_pdf_character(self):
         """获取pdf文件每页的文字"""
         get_path = self.get_pdf_path()  # 获取pdf文件的路径
-        pdf_doc = fitz.open(get_path)
+        pdf_doc = pdf.open(get_path)
         for page in pdf_doc:
             text = page.get_text()
             pass

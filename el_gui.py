@@ -285,7 +285,7 @@ class MainWindow(QMainWindow):
 
     def _on_cover_card_clicked(self, index) -> None:
         """点击封面卡片"""
-        book = self.cover_model.get_book(index.test_row())
+        book = self.cover_model.get_book(index.row())
         if book:
             self.statusbar.showMessage(f"{book['name']}")
 
