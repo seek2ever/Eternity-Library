@@ -1,4 +1,6 @@
 # 数据层：只负责管理数据，不关心如何显示
+from __future__ import annotations
+
 from PySide6.QtCore import (
     QAbstractListModel,
     QModelIndex,

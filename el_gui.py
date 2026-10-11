@@ -34,6 +34,10 @@ from database import (
     DatabaseManager,
 )
 from utils import Tips
+from book_record import (
+    BOOK_COLUMN_TITLES,
+    BookRecord,
+)
 from cover_model import CoverCardModel
 from cover_delegate import CoverCardDelegate
 from table_model import BookTableModel
@@ -46,8 +50,8 @@ class MainWindow(QMainWindow):
         # 初始化后台查询线程和缓存变量
         self._setup_book_worker()
         # 初始化数据库和信号连接
-        self.db = BookQueryWorker()
-        self.column_titles = self.db.column_titles_translation()
+        # self.db = BookQueryWorker()
+        self.column_titles = list(BOOK_COLUMN_TITLES)
 
         # self.db.duplicate_book.connect(self.handle_duplicate_book)
         # self.db.add_book_result.connect(self.show_add_result)
@@ -166,7 +170,7 @@ class MainWindow(QMainWindow):
 
         # 视图切换区
         view_label = QLabel(self._translate("Views", "视图模式"))
-        view_label.setAlignment(Qt.AlignCenter)
+        view_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         view_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
 
         self.toggle_view_btn = QPushButton("切换视图")
@@ -189,7 +193,7 @@ class MainWindow(QMainWindow):
 
         # 分类筛选区，后续计划改进为标签（类型名称）+拉下列表框的方式筛选
         filter_label = QLabel(self._translate("Filter", "分类筛选"))
-        filter_label.setAlignment(Qt.AlignCenter)
+        filter_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         filter_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
 
         self.category_list = QListWidget()
@@ -213,7 +217,7 @@ class MainWindow(QMainWindow):
 
         # 快捷操作区
         action_label = QLabel(self._translate("Actions", "快捷操作"))
-        action_label.setAlignment(Qt.AlignCenter)
+        action_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         action_label.setStyleSheet("font-weight: bold; font-size: 12pt;")
 
         self.scan_button = QPushButton(self._translate("Scan Files", "扫描文件"))
@@ -321,18 +325,23 @@ class MainWindow(QMainWindow):
         """查询出错时的处理"""
         Tips.information_msg(f"数据库查询失败：{error_msg}")
 
-    def _on_books_loaded(self, books: list) -> None:
+    def _on_books_loaded(self, books: list[BookRecord]) -> None:
         """收到后台查询结果（在主线程执行），直接传递给Model，View会自动刷新"""
-        # TODO：如果数据库返回的数据为空，是否需要清空View的显示？目前没有处理
-        if not books:
-            return
         self._books_cache = books
         self._cache_timestamp = time.time()
         self.cover_model.set_books(books)
         self.table_model.set_data(books)
-        self.statusbar.showMessage(
-            self._translate("Views", f"已刷新，共 {len(books)} 本书")
-        )
+        if books:
+            message = self._translate(
+                "There are books",
+                f"已刷新，共{len(books)}本书"
+            )
+        else:
+            message = self._translate(
+                "There is no book",
+                "已刷新，当前没有书籍记录"
+            )
+        self.statusbar.showMessage(message)
 
     # def _on_category_changed(self, test_row: int) -> None:
     #     """左侧分类选择变化时触发"""
@@ -407,9 +416,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         """窗口关闭时安全退出后台线程"""
-        self._query_thread.quit()  # 退出线程的事件循环
-        self._query_thread.wait(3000)  # 等待线程结束（最多 3 秒）
-        # self.db.close()  # 关闭数据库连接
+        self._query_thread.quit()       # 退出线程的事件循环
+        self._query_thread.wait(3000)   # 等待线程结束（最多3秒）
+        # self.db.close()               # 关闭数据库连接
         event.accept()
 
     @staticmethod
