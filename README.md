@@ -80,4 +80,21 @@ sequenceDiagram
 ## ScanBookFiles类中scan_book_files方法
 1. any_books_found = False，用于判断是否有新书被添加，若有则在最后返回True，否则返回False；使用if not any_books_found进行判断时，若any_books_found为False（即if not any_books_found的值为Ture）时，满足Python的真值测试（在Python中，if后面的条件为True时执行后面的代码，否则跳过）；
 2. GUI界面部件增加布局后，数据库中的数据可以正常显示；  
-3. 后台查询线程逻辑：创建新线程对象
+3. 后台查询线程逻辑：创建新线程对象  
+# 常见问题
+
+## 为什么不用Python的threading.Thread？  
+可以用，但Qt 的 QThread + moveToThread 提供了信号槽的跨线程自动排队机制。当 Worker 在工作线程发出 books_ready 信号时，Qt 会自动将槽函数 _on_books_loaded 的调用"排队"到主线程，无需手动加锁。用 threading.Thread 的话需要自己把结果安全地传回主线程。
+
+## 工作线程查询和主线程写入会冲突吗？  
+每个查询都创建独立的 sqlite3 连接，SQLite 默认允许多个连接同时读。但如果有并发写入（扫描添加书籍），建议开启 WAL 模式：在 DatabaseManager.create_table() 中加一行 self.cursor.execute("PRAGMA journal_mode=WAL")。以当前的写入频率（手动触发）来说，不开 WAL 也基本安全。
+
+# 后续可扩展的方向
+
+
+1. **真实封面缩略图**：PDF 书籍可以用 PyMuPDF 提取首页作为封面图，代替占位图标
+2. **详情弹窗**：点击卡片后弹出 `QDialog` 显示书籍完整信息（作者、简介、阅读进度等），而非简单的 QMessageBox
+3. **右键菜单**：卡片/表格行上右键弹出操作菜单（编辑信息、删除、打开文件位置等）
+4. **搜索框**：左侧面板顶部加一个 `QLineEdit`，输入书名实时过滤
+5. **拖拽调整卡片大小**：封面网格的列数随窗口宽度自适应
+6. **深色模式**：通过 QSS 切换
