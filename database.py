@@ -9,7 +9,7 @@ from PySide6.QtCore import (
     Slot,
 )
 
-from book_record import(
+from book_record import (
     BOOK_COLUMNS,
     BOOK_COLUMN_TITLES,
     BookRecord,
@@ -20,8 +20,8 @@ from book_record import(
 class DatabaseManager(QObject):
     """负责在主线程中与SQLite数据库交互，提供书籍信息的增删改查功能"""
     # 信号必须在类层级定义，不能在__init__中定义
-    duplicate_book = Signal(str)                          # 发送重复书籍名称
-    add_book_result = Signal(bool, str)            # 返回处理结果（成功状态，消息）
+    duplicate_book = Signal(str)  # 发送重复书籍名称
+    add_book_result = Signal(bool, str)  # 返回处理结果（成功状态，消息）
 
     def __init__(self, db_name='books_information.db'):
         super().__init__()
@@ -243,112 +243,134 @@ class DatabaseManager(QObject):
         self.connection.close()
 
 
-class BookQueryWorker(QObject):
-    """
-    在后台线程中执行数据库查询，避免阻塞UI主线程,线程内创建独立sqlite3连接，查完即关
-    """
-
-    # 应用运行中查询时所用信号
-    books_ready = Signal(list)      # 查询成功，携带书籍列表list[BookRecord]
-    query_error = Signal(str)       # 查询失败，携带错误信息
-    trigger_fetch = Signal()        # 触发 fetch_all_books 在后台线程执行
+class DatabaseWorker(QObject):
+    """在专用QThread中串行执行所有数据库读取操作。"""
+    initialized = Signal()  # 数据库初始化完成信号
+    books_ready = Signal(list)
+    query_error = Signal(str)
+    database_closed = Signal()
 
     def __init__(self, db_name='books_information.db'):
-        """
-        :param db_name: 数据库文件（如 'books_information.db'）
-        """
         super().__init__()
         self.db_name = db_name
+        self.connection = None
 
-    def _execute_query(self, sql: str, params: tuple = ()) -> list[tuple] | None:
-        """
-        在工作线程中执行查询，返回 SQLite 原始行。
-        查询失败时返回 None，具体错误由 query_error 发出。
-        """
-        conn = sqlite3.connect(self.db_name)
+    @Slot()
+    def initialize(self):
+        """由Worker所在线程调用，创建该线程专属的连接。"""
+        if self.connection is not None:
+            return
+
         try:
-            cursor = conn.cursor()
-            cursor.execute(sql, params)
-            result = cursor.fetchall()
-            cursor.close()
-            return result
-        except sqlite3.Error as error:
-            self.query_error.emit(str(error))
-            return None
-        finally:
-            conn.close()
+            self.connection = sqlite3.connect(self.db_name)
+            self.connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS books_information (
+                    book_id INTEGER,
+                    book_name TEXT NOT NULL,
+                    book_path TEXT,
+                    add_time TEXT,
+                    author TEXT,
+                    nationality TEXT,
+                    translator TEXT,
+                    publisher TEXT,
+                    publication_date TEXT,
+                    level TEXT,
+                    read_status TEXT,
+                    book_type TEXT,
+                    isbn INTEGER,
+                    pages INTEGER,
+                    read_progress TEXT,
+                    read_time REAL,
+                    read_date TEXT,
+                    read_link TEXT,
+                    introduction TEXT
+                )
+                """
+            )
+            self.connection.commit()
+        except sqlite3.Error as e:
+            self._close_connection()
+            self.query_error.emit(f"数据库初始化失败：{e}")
+            return
 
-    @Slot()     # 把方法注册到 Qt的元对象系统，确保跨线程排队调用时正确识别执行
+        self.initialized.emit()
+
+    def _close_connection(self):
+        if self.connection is not None:
+            self.connection.close()
+            self.connection = None
+
+    def _select(self, sql: str, params: tuple = ()) -> list[BookRecord] | None:
+        """执行一次参数化查询，并把结果转换成阶段0的数据结果（BookRecord列表）"""
+        if self.connection is None:
+            self.query_error.emit("数据库连接未初始化，无法查询。")
+            return None
+        try:
+            rows = self.connection.execute(sql, params).fetchall()
+            return rows_to_records(rows)
+        except sqlite3.Error as e:
+            self.query_error.emit(f"查询失败：{e}")
+        except (TypeError, ValueError) as error:
+            self.query_error.emit(f"数据转换失败：{error}")
+        return None
+
+    @Slot()
     def fetch_all_books(self):
-        """查询全部书籍，并把每一行转换为 BookRecord。"""
-        result = self._execute_query(
+        """查询全部书籍，空数据库也会发送books_ready([])。"""
+        books = self._select(
             "SELECT * FROM books_information ORDER BY book_id"
         )
-        if result is None:
-            return
+        if books is not None:
+            self.books_ready.emit(books)
 
-        try:
-            books = rows_to_records(result)
-        except (TypeError, ValueError) as error:
-            self.query_error.emit(f"书籍数据格式错误：{error}")
-            return
-
-        self.books_ready.emit(books)
-
+    @Slot(str)
     def fetch_books_by_type(self, book_type: str):
-        """按类型查询（预留，待后续接入分类筛选功能）"""
-        self._execute_query(
-            "SELECT * FROM books_information WHERE book_type=?", (book_type,)
+        """按书籍类型精确筛选。"""
+        books = self._select(
+            """
+            SELECT * FROM books_information WHERE book_type=? 
+            ORDER BY book_id
+            """,
+            (book_type,),
         )
+        if books is not None:
+            self.books_ready.emit(books)
 
-    def fetch_books_by_status(self, status: str):
-        """按阅读状态查询（预留）"""
-        self._execute_query(
-            "SELECT * FROM books_information WHERE read_status=?", (status,)
+    @Slot(str)
+    def fetch_books_by_status(self, read_status: str):
+        """按阅读状态精确筛选。"""
+        books = self._select(
+            """
+            SELECT * FROM books_information
+            WHERE read_status = ?
+            ORDER BY book_id
+            """,
+            (read_status,),
         )
+        if books is not None:
+            self.books_ready.emit(books)
 
+    @Slot(str)
     def fetch_books_by_author(self, author: str):
-        """按作者查询（预留）"""
-        self._execute_query(
-            "SELECT * FROM books_information WHERE author=?", (author,)
+        """按作者精确筛选。"""
+        books = self._select(
+            """
+            SELECT * FROM books_information
+            WHERE author = ?
+            ORDER BY book_id
+            """,
+            (author,),
         )
+        if books is not None:
+            self.books_ready.emit(books)
 
-    def column_titles(self) -> list[tuple[Any, ...]] | str | None:
-        """获取列的标题信息"""
-        titles = self._execute_query("PRAGMA table_info(books_information)")
-        return titles
-
-    def column_titles_translation(self) -> list[str] | str | None:
-        """获取列的标题信息并翻译"""
-        raw_titles = self.column_titles()
-        header = [title[1] for title in raw_titles]
-        translation_map = [
-            {header[0]: '书籍ID'},
-            {header[1]: '书籍名称'},
-            {header[2]: '书籍路径'},
-            {header[3]: '添加时间'},
-            {header[4]: '作者'},
-            {header[5]: '国籍'},
-            {header[6]: '译者'},
-            {header[7]: '出版社'},
-            {header[8]: '出版日期'},
-            {header[9]: '书籍等级'},
-            {header[10]: '阅读状态'},
-            {header[11]: '书籍类型'},
-            {header[12]: 'ISBN'},
-            {header[13]: '页数'},
-            {header[14]: '阅读进度'},
-            {header[15]: '阅读时间'},
-            {header[16]: '阅读日期'},
-            {header[17]: '阅读链接'},
-            {header[18]: '简介'}
-        ]
-        # 返回一维字符串列表，方便QAbstractTableModel直接作为表头使用
-        translations = [next(iter(item.values())) for item in translation_map]
-        return translations
+    @Slot()
+    def close_database(self):
+        """关闭数据库连接"""
+        self._close_connection()
+        self.database_closed.emit()
 
 
 if __name__ == '__main__':
-    db = BookQueryWorker()
-    res = db.column_titles_translation()
-
+    pass
