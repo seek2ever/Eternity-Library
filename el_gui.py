@@ -9,6 +9,7 @@ from PySide6.QtCore import (
     QSize,
     QThread,
     Qt,
+    Signal,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -30,8 +31,8 @@ from PySide6.QtWidgets import (
 
 from books import ScanBookFiles
 from database import (
-    BookQueryWorker,
     DatabaseManager,
+    DatabaseWorker,
 )
 from utils import Tips
 from book_record import (
@@ -45,17 +46,20 @@ from table_delegate import TableDelegate
 
 
 class MainWindow(QMainWindow):
+    request_initialize = Signal()
+    request_fetch_all = Signal()
+    request_fetch_by_type = Signal(str)
+    request_fetch_by_status = Signal(str)
+    request_fetch_by_author = Signal(str)
+    request_close_database = Signal()
+
     def __init__(self):
         super().__init__()
-        # 初始化后台查询线程和缓存变量
+        # 初始化缓存与后台查询线程
+        self._books_cache = None
         self._setup_book_worker()
-        # 初始化数据库和信号连接
-        # self.db = BookQueryWorker()
-        self.column_titles = list(BOOK_COLUMN_TITLES)
 
-        # self.db.duplicate_book.connect(self.handle_duplicate_book)
-        # self.db.add_book_result.connect(self.show_add_result)
-        # self._initial_books_cache = None
+        self.column_titles = list(BOOK_COLUMN_TITLES)
 
         # 实例化各个视图对应的数据模型和代理
         self.cover_model = CoverCardModel()
@@ -82,25 +86,47 @@ class MainWindow(QMainWindow):
         self.setup_ui()
 
     def _setup_book_worker(self):
-        """初始化后台查询线程、缓存变量"""
-        # 缓存最后一次查询结果
-        self._books_cache = None
-        self._cache_timestamp = 0  # 缓存时间戳
+        """创建读取线程，并在 Worker 初始化完成后加载全部书籍。"""
+        self._books_cache: list[BookRecord] | None = None
+        self._cache_timestamp = 0.0
 
-        # 创建后台查询线程
-        self._query_thread = QThread()
-        # 创建Worker（传入数据库文件名books_information.db，不传连接对象）
-        self._book_worker = BookQueryWorker()
-        # 把 Worker 移到工作线程（此后Worker的所有槽函数在工作线程执行）
-        self._book_worker.moveToThread(self._query_thread)
-        # 连接信号和槽
-        self._book_worker.books_ready.connect(self._on_books_loaded)
-        self._book_worker.query_error.connect(self._on_query_error)
-        # trigger_fetch → fetch_all_books：跨线程自动 QueuedConnection
-        self._book_worker.trigger_fetch.connect(self._book_worker.fetch_all_books)
-        # 启动工作线程，进入事件循环
-        self._query_thread.start()
-        self._book_worker.trigger_fetch.emit()
+        self._database_thread = QThread(self)
+        self._database_worker = DatabaseWorker()
+        self._database_worker.moveToThread(self._database_thread)
+
+        self._database_worker.initialized.connect(
+            self._on_database_initialized
+        )
+        self._database_worker.books_ready.connect(self._on_books_loaded)
+        self._database_worker.query_error.connect(self._on_query_error)
+        self._database_worker.database_closed.connect(
+            self._database_thread.quit
+        )
+
+        self.request_initialize.connect(
+            self._database_worker.initialize
+        )
+        self.request_fetch_all.connect(
+            self._database_worker.fetch_all_books
+        )
+        self.request_fetch_by_type.connect(
+            self._database_worker.fetch_books_by_type
+        )
+        self.request_fetch_by_status.connect(
+            self._database_worker.fetch_books_by_status
+        )
+        self.request_fetch_by_author.connect(
+            self._database_worker.fetch_books_by_author
+        )
+        self.request_close_database.connect(
+            self._database_worker.close_database
+        )
+
+        self._database_thread.finished.connect(
+            self._database_worker.deleteLater
+        )
+        self._database_thread.start()
+        self.request_initialize.emit()
 
     def setup_ui(self):
         # 设置窗口属性
@@ -311,57 +337,56 @@ class MainWindow(QMainWindow):
             self.statusbar.showMessage(self._translate("Views", "已切换到封面视图"))
 
     def refresh_view(self) -> None:
-        """触发后台查询，若存在有效缓存则直接使用"""
-        # 缓存有效（30秒内），直接渲染，不走数据库
-        if self._books_cache is not None and (time.time() - self._cache_timestamp) < 30:
+        """刷新当前数据；缓存有效时不重复查询全部书籍。"""
+        if (
+                self._books_cache is not None
+                and (time.time() - self._cache_timestamp) < 30
+        ):
             self._on_books_loaded(self._books_cache)
             return
 
-        # 缓存过期或不存在 → 触发后台线程查询
-        self._book_worker.trigger_fetch.emit()
+        self.request_fetch_all.emit()
 
-    @staticmethod
     def _on_query_error(self, error_msg: str) -> None:
-        """查询出错时的处理"""
+        """所有数据库读取错误都在主线程提示用户。"""
         Tips.information_msg(f"数据库查询失败：{error_msg}")
+        if self.statusbar is not None:
+            self.statusbar.showMessage("数据库查询失败")
+
+    def _on_database_initialized(self) -> None:
+        """Worker完成连接和建表后，才允许发出查询请求。"""
+        if self.statusbar is not None:
+            self.statusbar.showMessage("数据库已就绪")
+        self.request_fetch_all.emit()
 
     def _on_books_loaded(self, books: list[BookRecord]) -> None:
-        """收到后台查询结果（在主线程执行），直接传递给Model，View会自动刷新"""
+        """在主线程接收结果并刷新两个 Model。"""
         self._books_cache = books
         self._cache_timestamp = time.time()
         self.cover_model.set_books(books)
         self.table_model.set_data(books)
+
         if books:
-            message = self._translate(
-                "There are books",
-                f"已刷新，共{len(books)}本书"
-            )
+            message = self._translate("Views", f"已刷新，共 {len(books)} 本书")
         else:
-            message = self._translate(
-                "There is no book",
-                "已刷新，当前没有书籍记录"
-            )
-        self.statusbar.showMessage(message)
+            message = self._translate("Views", "数据库中暂无书籍")
+        if self.statusbar is not None:
+            self.statusbar.showMessage(message)
 
-    # def _on_category_changed(self, test_row: int) -> None:
-    #     """左侧分类选择变化时触发"""
-    #     # TODO：目前此方法不方便同时进行多项筛选，后续需优化
-    #     categories = ["全部", "按书籍类型", "按阅读状态", "按作者"]
-    #     if test_row < 0 or test_row >= len(categories):
-    #         return
-    #     category = categories[test_row]
-    #     self.statusbar.showMessage(self._translate("Views", f"已选择分类：{category}"))
-    #     if category == "全部":
-    #         books = self.db.get_all_books()
-    #     elif category == "按书籍类型":
-    #         books = self.db.get_books_by_type()
-    #     elif category == "按阅读状态":
-    #         books = self.db.get_books_by_status()
-    #     elif category == "按作者":
-    #         books = self.db.get_books_by_author()
+    def load_books_by_type(self, book_type: str) -> None:
+        """由界面传入具体类型，例如“小说”。"""
+        self._books_cache = None
+        self.request_fetch_by_type.emit(book_type)
 
-        # # 刷新封面和列表视图
-        # self.refresh_view()
+    def load_books_by_status(self, read_status: str) -> None:
+        """由界面传入具体阅读状态，例如“正在阅读”。"""
+        self._books_cache = None
+        self.request_fetch_by_status.emit(read_status)
+
+    def load_books_by_author(self, author: str) -> None:
+        """由界面传入具体作者名称。"""
+        self._books_cache = None
+        self.request_fetch_by_author.emit(author)
 
     @staticmethod
     def scan_books(self) -> None:
@@ -415,10 +440,12 @@ class MainWindow(QMainWindow):
             Tips.information_msg(message)
 
     def closeEvent(self, event) -> None:
-        """窗口关闭时安全退出后台线程"""
-        self._query_thread.quit()       # 退出线程的事件循环
-        self._query_thread.wait(3000)   # 等待线程结束（最多3秒）
-        # self.db.close()               # 关闭数据库连接
+        """窗口关闭时先关闭 Worker 连接，再退出线程。"""
+        self.request_close_database.emit()
+        if not self._database_thread.wait(3000):
+            Tips.information_msg("数据库线程未能在3秒内正常退出。")
+            event.ignore()
+            return
         event.accept()
 
     @staticmethod
