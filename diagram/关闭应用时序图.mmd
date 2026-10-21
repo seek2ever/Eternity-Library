@@ -1,0 +1,50 @@
+sequenceDiagram
+    autonumber
+    actor User as 用户
+    participant Button as 关闭按钮
+    participant Window as MainWindow
+    participant GUI as GUI主线程/事件循环
+    participant Thread as 数据库QThread
+    participant Worker as DatabaseWorker
+    participant DB as SQLite连接
+    participant App as QApplication
+
+    alt 点击界面“关闭”按钮
+        User->>Button: 点击
+        Button->>Window: clicked → close()
+    else 点击窗口标题栏关闭
+        User->>Window: 窗口关闭请求
+    end
+
+    Window->>Window: closeEvent(event)
+    Window->>Worker: request_close_database.emit()
+    Note over Window,Worker: Worker 已 moveToThread；请求排队到数据库线程执行
+    par GUI主线程等待
+        Window->>Thread: wait(3000)
+        Note over Window,GUI: wait 在 GUI 主线程同步等待，期间 GUI 事件循环被阻塞
+    and 数据库线程处理关闭请求
+        Worker->>Worker: close_database()
+        Worker->>DB: 关闭连接并置为 None
+        Worker-->>Thread: database_closed.emit()
+        Note over Thread,GUI: QThread 对象属于 GUI 线程；跨线程 AutoConnection 将 quit() 排入 GUI 事件队列
+    end
+
+    Thread-->>Window: wait() 3 秒后返回 False
+    Window->>Window: 提示“数据库线程未能在3秒内正常退出”
+    Note over Window,GUI: QMessageBox.information 是模态调用，会运行嵌套事件循环
+    GUI->>Thread: 模态提示框期间处理已排队的 quit()
+    Thread->>Thread: 数据库线程事件循环退出
+    Thread-->>Worker: finished → deleteLater()
+    User->>Window: 点击提示框“确定”
+    Window->>Window: event.ignore()
+    Window-->>User: 本次关闭被取消，窗口仍打开
+
+    User->>Window: 再次触发关闭
+    Window->>Window: closeEvent(event)
+    Window->>Window: request_close_database.emit()（Worker 已销毁，连接已断开）
+    Window->>Thread: wait(3000)，线程已结束，立即返回 True
+    Window->>Window: event.accept()
+    Window-->>User: 窗口关闭
+    Window->>App: 最后一个窗口关闭
+    App-->>GUI: app.exec() 返回
+    GUI->>GUI: sys.exit(app.exec()) 退出进程

@@ -437,7 +437,7 @@ class MainWindow(QMainWindow):
         else:
             Tips.information_msg(message)
 
-    def closeEvent(self, event) -> None:
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         """窗口关闭时先关闭 Worker 连接，再退出线程。"""
         self.request_close_database.emit()
         if not self._database_thread.wait(3000):
