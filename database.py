@@ -316,7 +316,7 @@ class DatabaseWorker(QObject):
         return None
 
     @Slot()
-    def fetch_all_books(self):
+    def fetch_all_books(self) -> None:
         """查询全部书籍，空数据库也会发送books_ready([])。"""
         books = self._select(
             "SELECT * FROM books_information ORDER BY book_id"
@@ -325,7 +325,7 @@ class DatabaseWorker(QObject):
             self.books_ready.emit(books)
 
     @Slot(str)
-    def fetch_books_by_type(self, book_type: str):
+    def fetch_books_by_type(self, book_type: str) -> None:
         """按书籍类型精确筛选。"""
         books = self._select(
             """
@@ -338,7 +338,7 @@ class DatabaseWorker(QObject):
             self.books_ready.emit(books)
 
     @Slot(str)
-    def fetch_books_by_status(self, read_status: str):
+    def fetch_books_by_status(self, read_status: str) -> None:
         """按阅读状态精确筛选。"""
         books = self._select(
             """
@@ -352,7 +352,7 @@ class DatabaseWorker(QObject):
             self.books_ready.emit(books)
 
     @Slot(str)
-    def fetch_books_by_author(self, author: str):
+    def fetch_books_by_author(self, author: str) -> None:
         """按作者精确筛选。"""
         books = self._select(
             """
