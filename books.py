@@ -54,13 +54,7 @@ class ScanBookFiles(QWidget):
         扫描本地硬盘中的电子书，directory为待扫描文件所在路径；output_file为扫描记录的路径
         """
         date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
-        supported_extensions = [
-            '.pdf',
-            '.doc',
-            '.docx',
-            '.epub',
-            '.txt'
-        ]   # 支持的文件格式
+        supported_extensions = ['.pdf', '.doc', '.docx', '.epub', '.txt']   # 支持的文件格式
         scan_info = []
         books_found = False    # 添加标志位，表示此时尚未有任何电子书文件被找到
         try:

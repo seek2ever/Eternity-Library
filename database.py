@@ -3,13 +3,10 @@ from __future__ import annotations
 import random
 import sqlite3
 from typing import Union, Any
-
-from PySide6 import QtRemoteObjects
 from PySide6.QtCore import (
     QObject,
     Signal,
     Slot,
-    QThread,
 )
 
 from book_record import (
@@ -265,7 +262,6 @@ class DatabaseWorker(QObject):
             return
 
         try:
-            # 由工作线程调用initialize()创建连接，创建、使用和关闭连接都在同一线程，符合SQLite的线程安全要求
             self.connection = sqlite3.connect(self.db_name)
             self.connection.execute(
                 """
@@ -318,24 +314,6 @@ class DatabaseWorker(QObject):
         except (TypeError, ValueError) as error:
             self.query_error.emit(f"数据转换失败：{error}")
         return None
-
-    def _select_one(self, sql: str, params: tuple = ()) -> BookRecord | None:
-        """执行一次单行查询，返回BookRecord或None。"""
-        if self.connection is None:
-            self.query_error.emit("数据库连接未初始化，无法查询。")
-            return None
-        try:
-            row = self.connection.execute(sql, params).fetchone()
-        except sqlite3.Error as e:
-            self.query_error.emit(f"查询失败：{e}")
-            return None
-        if row is None:
-            return None
-        try:
-            return BookRecord.from_row(row)
-        except ValueError as error:
-            self.query_error.emit(f"数据转换失败：{error}")
-            return None
 
     @Slot()
     def fetch_all_books(self) -> None:
@@ -392,13 +370,7 @@ class DatabaseWorker(QObject):
         """关闭数据库连接"""
         self._close_connection()
         self.database_closed.emit()
-        # 在工作线程中调用quit()方法，退出事件循环，避免阻塞主线程
-        QThread.currentThread().quit()
 
 
 if __name__ == '__main__':
-    worker = DatabaseWorker()
-    worker.initialize()
-    result = worker._select("SELECT * FROM books_information")
-    print(result)
-
+    pass

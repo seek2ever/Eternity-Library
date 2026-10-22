@@ -92,14 +92,15 @@ class MainWindow(QMainWindow):
         self._database_worker = DatabaseWorker()
         self._database_worker.moveToThread(self._database_thread)
 
-        # 工作线程信号 -> 主线程槽函数
         self._database_worker.initialized.connect(
             self._on_database_initialized
         )
         self._database_worker.books_ready.connect(self._on_books_loaded)
         self._database_worker.query_error.connect(self._on_query_error)
+        self._database_worker.database_closed.connect(
+            self._database_thread.quit
+        )
 
-        # 主线程信号 -> 工作线程槽函数
         self.request_initialize.connect(
             self._database_worker.initialize
         )
@@ -119,11 +120,9 @@ class MainWindow(QMainWindow):
             self._database_worker.close_database
         )
 
-        # 工作线程结束后安全销毁_database_worker，释放它作为QObject的资源
         self._database_thread.finished.connect(
             self._database_worker.deleteLater
         )
-        # 启动工作线程并发出初始化信号
         self._database_thread.start()
         self.request_initialize.emit()
 
@@ -229,6 +228,7 @@ class MainWindow(QMainWindow):
             "按作者",
         ])
         self.category_list.setFixedHeight(140)
+        # self.category_list.currentRowChanged.connect(self._on_category_changed)
 
         layout.addWidget(filter_label)
         layout.addWidget(self.category_list)
@@ -438,11 +438,7 @@ class MainWindow(QMainWindow):
             Tips.information_msg(message)
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
-        """
-        跨线程投递close_database到工作线程后立即返回到主线程，主线程立即执行wait(3000)，
-        self._database_thread属于主线程，因此在此处调用wait()会阻塞主线程（最多等待3000ms），
-        如果工作线程在3秒内结束则返回True，否则返回False。
-        """
+        """窗口关闭时先关闭 Worker 连接，再退出线程。"""
         self.request_close_database.emit()
         if not self._database_thread.wait(3000):
             Tips.information_msg("数据库线程未能在3秒内正常退出。")
