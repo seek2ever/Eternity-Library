@@ -56,7 +56,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         # 初始化缓存与后台查询线程
-        self._books_cache = None
+        self._books_cache: list[BookRecord] | None = None
+        self._cache_timestamp = 0.0
         self._setup_book_worker()
 
         self.column_titles = list(BOOK_COLUMN_TITLES)
@@ -86,10 +87,7 @@ class MainWindow(QMainWindow):
         self.setup_ui()
 
     def _setup_book_worker(self):
-        """创建读取线程，并在 Worker 初始化完成后加载全部书籍。"""
-        self._books_cache: list[BookRecord] | None = None
-        self._cache_timestamp = 0.0
-
+        """创建读取线程，并在Worker初始化完成后加载全部书籍。"""
         self._database_thread = QThread(self)
         self._database_worker = DatabaseWorker()
         self._database_worker.moveToThread(self._database_thread)
@@ -439,7 +437,7 @@ class MainWindow(QMainWindow):
         else:
             Tips.information_msg(message)
 
-    def closeEvent(self, event) -> None:
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         """窗口关闭时先关闭 Worker 连接，再退出线程。"""
         self.request_close_database.emit()
         if not self._database_thread.wait(3000):
