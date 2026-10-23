@@ -157,8 +157,8 @@ class MainWindow(QMainWindow):
         icon = QtGui.QIcon()
         icon.addPixmap(
             QtGui.QPixmap("images/icons/book_icon.png"),
-            QtGui.QIcon.Normal,
-            QtGui.QIcon.Off
+            QtGui.QIcon.Mode.Normal,
+            QtGui.QIcon.State.Off
         )
         self.setWindowIcon(icon)
 
@@ -323,7 +323,7 @@ class MainWindow(QMainWindow):
 
         self.cover_card_view.setFrameShape(QFrame.NoFrame)
         self.cover_card_view.setBackgroundRole(QtGui.QPalette.Base)
-        self.cover_card_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.cover_card_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.cover_card_view.setVerticalScrollMode(QListView.ScrollPerPixel)
 
         self.cover_card_view.clicked.connect(self._on_cover_card_clicked)
@@ -456,22 +456,22 @@ class MainWindow(QMainWindow):
                 "选择的处理方式将用于这一条重复记录。"
             )
             message.setStandardButtons(
-                QMessageBox.Yes
-                | QMessageBox.No
-                | QMessageBox.Ignore
-                | QMessageBox.Cancel
+                QMessageBox.StandardButton.Yes
+                | QMessageBox.StandardButton.No
+                | QMessageBox.StandardButton.Ignore
+                | QMessageBox.StandardButton.Cancel
             )
-            message.setButtonText(QMessageBox.Yes, "覆盖")
-            message.setButtonText(QMessageBox.No, "重命名")
-            message.setButtonText(QMessageBox.Ignore, "跳过")
-            message.setButtonText(QMessageBox.Cancel, "取消整个批次")
+            message.setButtonText(QMessageBox.StandardButton.Yes, "覆盖")
+            message.setButtonText(QMessageBox.StandardButton.No, "重命名")
+            message.setButtonText(QMessageBox.StandardButton.Ignore, "跳过")
+            message.setButtonText(QMessageBox.StandardButton.Cancel, "取消整个批次")
 
             choice = message.exec()
-            if choice == QMessageBox.Yes:
+            if choice == QMessageBox.StandardButton.Yes:
                 duplicate_actions[index] = "overwrite"
-            elif choice == QMessageBox.No:
+            elif choice == QMessageBox.StandardButton.No:
                 duplicate_actions[index] = "rename"
-            elif choice == QMessageBox.Ignore:
+            elif choice == QMessageBox.StandardButton.Ignore:
                 duplicate_actions[index] = "skip"
             else:
                 self._finish_scan_batch()
