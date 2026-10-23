@@ -14,7 +14,6 @@ dependencies = [
     "pyside6-essentials>=6.6.3",  # PySide6 核心组件（QtCore/QtGui/QtWidgets），由 pyside6 自动安装
     "pymupdf>=1.24.0",  # PDF 解析库，代码里 `import fitz`，读取封面和文字
     "pymupdfb>=1.24.0",  # PyMuPDF 的二进制底层库，由 pymupdf 自动安装
-
     # ============== 打包工具链：只在"打包成 exe"时需要，平时运行用不到 ==============
     "auto-py-to-exe>=2.50.1",  # PyInstaller 的图形化打包工具
     "pyinstaller>=6.12.0",  # 打包引擎，把 Python 程序打包成 exe
@@ -29,7 +28,6 @@ dependencies = [
     "charset-normalizer>=3.4.1",  # 字符编码检测（requests 的依赖）
     "idna>=3.10",  # 国际化域名编码（requests 的依赖）
     "urllib3>=2.3.0",  # requests 的底层 HTTP 库
-
     # ============== Eel Web 框架链：被 auto-py-to-exe 依赖的 eel 带进来，与项目完全无关 ==============
     "eel>=0.18.1",  # 用网页做桌面 GUI 的框架（本项目用 PySide6，用不到）
     "bottle>=0.13.2",  # eel 内部的轻量 Web 服务器
@@ -44,7 +42,6 @@ dependencies = [
     "future>=1.0.0",  # Python 2/3 兼容层（eel 依赖）
     "pyparsing>=3.2.3",  # 解析器库（eel 依赖）
     "typing-extensions>=4.13.0",  # 类型注解扩展（eel 依赖）
-
     # ==================== 杂项 / 遗留：代码里没有任何地方使用 ====================
     "importlib-metadata>=7.1.0",  # 读取已安装包的元数据（旧版打包工具依赖，已基本弃用）
     "zipp>=3.21.0",  # 操作 zip 文件的库（importlib-metadata 的依赖）
@@ -53,6 +50,7 @@ dependencies = [
     "pip>=26.2.1",  # Python 包管理器（不应作为项目依赖，纯遗留）
     "pywin32>=312",  # Windows API 的 Python 封装（程序未使用）
     "pypiwin32>=223",  # pywin32 的旧别名（已废弃，只是依赖 pywin32）
+    "pyrefly>=0.60.0",
 ]
 [project.scripts]
 eternity-library = "eternity_library:main"

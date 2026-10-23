@@ -5,6 +5,7 @@ import sqlite3
 from typing import Union, Any
 from PySide6.QtCore import (
     QObject,
+    QThread,
     Signal,
     Slot,
 )
@@ -249,6 +250,9 @@ class DatabaseWorker(QObject):
     books_ready = Signal(list)
     query_error = Signal(str)
     database_closed = Signal()
+    duplicates_ready = Signal(list)
+    write_finished = Signal(int, int, int)  # 新增数、跳过数、覆盖数
+    write_error = Signal(str)
 
     def __init__(self, db_name='books_information.db'):
         super().__init__()
@@ -364,12 +368,181 @@ class DatabaseWorker(QObject):
         )
         if books is not None:
             self.books_ready.emit(books)
+    
+    def _book_name_exists(self, book_name: str) -> bool:
+        """检查当前连接中是否已有同名书籍。"""
+        row = self.connection.execute(
+            "SELECT 1 FROM books_information WHERE book_name = ? LIMIT 1",
+            (book_name,),
+        ).fetchone()
+        return row is not None
+
+    @Slot(object)
+    def find_batch_duplicates(self, books: object) -> None:
+        """找出数据库中已存在或本批次内重复的书名，返回 (批次索引, 书名)。"""
+        if self.connection is None:
+            self.write_error.emit("数据库连接未初始化，无法检查重复书籍。")
+            return
+
+        try:
+            if not isinstance(books, list):
+                raise TypeError("待入库数据必须是 list[BookRecord]。")
+
+            seen_names: set[str] = set()
+            duplicates: list[tuple[int, str]] = []
+            for index, book in enumerate(books):
+                if not isinstance(book, BookRecord):
+                    raise TypeError(f"第 {index + 1} 条数据不是 BookRecord。")
+                if not isinstance(book.book_name, str) or not book.book_name.strip():
+                    raise ValueError(f"第 {index + 1} 条书籍的书名不能为空。")
+
+                book_name = book.book_name
+                if book_name in seen_names or self._book_name_exists(book_name):
+                    duplicates.append((index, book_name))
+                seen_names.add(book_name)
+        except (sqlite3.Error, TypeError, ValueError) as error:
+            self.write_error.emit(f"检查重复书籍失败：{error}")
+            return
+
+        self.duplicates_ready.emit(duplicates)
+
+    @staticmethod
+    def _next_unique_book_name(
+        book_name: str,
+        occupied_names: set[str],
+    ) -> str:
+        """为重名书籍寻找第一个可用名称。"""
+        suffix = 1
+        while True:
+            candidate = f"{book_name}({suffix})"
+            if candidate not in occupied_names:
+                return candidate
+            suffix += 1
+
+    @staticmethod
+    def _next_unique_book_id(used_ids: set[int]) -> int:
+        """生成当前数据库和本次批次都未使用的 10 位书籍 ID。"""
+        while True:
+            book_id = random.randint(1_000_000_000, 9_999_999_999)
+            if book_id not in used_ids:
+                used_ids.add(book_id)
+                return book_id
+
+    @Slot(object, object)
+    def insert_books(self, books: object, duplicate_actions: object) -> None:
+        """在单个 SQLite 事务中处理整批书籍。"""
+        if self.connection is None:
+            self.write_error.emit("数据库连接未初始化，无法写入书籍。")
+            return
+
+        try:
+            if not isinstance(books, list):
+                raise TypeError("待入库数据必须是 list[BookRecord]。")
+            if not isinstance(duplicate_actions, dict):
+                raise TypeError("重复书籍处理结果必须是字典。")
+
+            for index, book in enumerate(books):
+                if not isinstance(book, BookRecord):
+                    raise TypeError(f"第 {index + 1} 条数据不是 BookRecord。")
+                if not isinstance(book.book_name, str) or not book.book_name.strip():
+                    raise ValueError(f"第 {index + 1} 条书籍的书名不能为空。")
+
+            for index, action in duplicate_actions.items():
+                if (
+                    not isinstance(index, int)
+                    or not 0 <= index < len(books)
+                    or action not in {"overwrite", "rename", "skip"}
+                ):
+                    raise ValueError("重复书籍处理结果中包含无效选项。")
+
+            added_count = 0
+            skipped_count = 0
+            overwritten_count = 0
+
+            # 先取得 SQLite 写锁，再检查重复项，避免其他进程在检查与插入之间
+            # 写入同名记录。connection 上下文负责成功提交或异常回滚。
+            with self.connection:
+                self.connection.execute("BEGIN IMMEDIATE")
+                occupied_names = {
+                    row[0]
+                    for row in self.connection.execute(
+                        "SELECT book_name FROM books_information"
+                    ).fetchall()
+                    if row[0] is not None
+                }
+                used_ids = {
+                    row[0]
+                    for row in self.connection.execute(
+                        "SELECT book_id FROM books_information WHERE book_id IS NOT NULL"
+                    ).fetchall()
+                }
+
+                placeholders = ", ".join("?" for _ in BOOK_COLUMNS)
+                sql = (
+                    f"INSERT INTO books_information "
+                    f"({', '.join(BOOK_COLUMNS)}) "
+                    f"VALUES ({placeholders})"
+                )
+
+                for index, book in enumerate(books):
+                    original_name = book.book_name
+                    final_name = original_name
+                    is_duplicate = final_name in occupied_names
+
+                    if is_duplicate:
+                        action = duplicate_actions.get(index)
+                        if action is None:
+                            raise ValueError(
+                                f"书名“{original_name}”在重复检查后发生变化，"
+                                "请重新扫描并处理重复项。"
+                            )
+
+                        if action == "skip":
+                            skipped_count += 1
+                            continue
+                        if action == "overwrite":
+                            self.connection.execute(
+                                "DELETE FROM books_information WHERE book_name = ?",
+                                (original_name,),
+                            )
+                            occupied_names.discard(original_name)
+                            overwritten_count += 1
+                        elif action == "rename":
+                            final_name = self._next_unique_book_name(
+                                original_name,
+                                occupied_names,
+                            )
+
+                    values = book.to_mapping()
+                    values["book_name"] = final_name
+                    if values["book_id"] is None or values["book_id"] in used_ids:
+                        values["book_id"] = self._next_unique_book_id(used_ids)
+                    else:
+                        used_ids.add(values["book_id"])
+
+                    self.connection.execute(
+                        sql,
+                        tuple(values[column] for column in BOOK_COLUMNS),
+                    )
+                    occupied_names.add(final_name)
+                    added_count += 1
+
+        except (sqlite3.Error, TypeError, ValueError) as error:
+            self.write_error.emit(f"批量写入失败，已回滚本批次：{error}")
+            return
+
+        self.write_finished.emit(
+            added_count,
+            skipped_count,
+            overwritten_count,
+        )
 
     @Slot()
     def close_database(self):
         """关闭数据库连接"""
         self._close_connection()
         self.database_closed.emit()
+        QThread.currentThread().quit()
 
 
 if __name__ == '__main__':
