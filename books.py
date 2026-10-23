@@ -8,10 +8,21 @@ import sys
 import time
 
 import pymupdf as pdf
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QFileDialog, QVBoxLayout, QMessageBox
+from PySide6.QtCore import (
+    Qt, 
+    Signal,
+)
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog, 
+    QLabel,
+    QMessageBox, 
+    QPushButton,   
+    QVBoxLayout,
+    QWidget, 
+)
 
-from database import DatabaseManager
+from book_record import BookRecord
 from utils import Tips
 
 
@@ -20,6 +31,7 @@ class ScanBookFiles(QWidget):
     选择扫描路径的窗口，用户可以通过点击按钮选择扫描文件所在的路径，
     该窗口还会调用scan_book_files函数扫描文件夹中的电子书，并将结果写入文本文件
     """
+        books_scanned = Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -49,70 +61,62 @@ class ScanBookFiles(QWidget):
             QMessageBox.warning(self, "提示", "未选择扫描路径！扫描已取消。", QMessageBox.StandardButton.Ok)
             self.close()
 
-    def scan_book_files(self, directory):
-        """
-        扫描本地硬盘中的电子书，directory为待扫描文件所在路径；output_file为扫描记录的路径
-        """
-        date = datetime.datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')
-        supported_extensions = ['.pdf', '.doc', '.docx', '.epub', '.txt']   # 支持的文件格式
-        scan_info = []
-        books_found = False    # 添加标志位，表示此时尚未有任何电子书文件被找到
+        def scan_book_files(self, directory: str) -> None:
+        """扫描目录并把记录交给主窗口，不在这里创建数据库连接。"""
+        date = datetime.datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+        supported_extensions = (".pdf", ".doc", ".docx", ".epub", ".txt")
+        scan_info: list[dict[str, str]] = []
+
         try:
-            # 包含当前目录的路径（root），当前目录下的所有子目录名（dirs），以及当前目录下的所有文件名（files）
-            for root, dirs, files in os.walk(directory):
-                for file in files:
-                    if file.endswith(tuple(supported_extensions)):
-                        books_found = True                                  # 有电子书文件被找到时，标志位置为True
-                        file, end = os.path.splitext(file)                  # 分离文件与其扩展名，得到一个元组，例如('book','.pdf')
-                        book_info = {
-                            'book_name': file,
-                            'book_path': root,
-                            'book_type': end,
-                            'add_time': date
-                        }
-                        scan_info.append(book_info)
+            for root, _dirs, files in os.walk(directory):
+                for file_name in files:
+                    if file_name.lower().endswith(supported_extensions):
+                        book_name, extension = os.path.splitext(file_name)
+                        scan_info.append({
+                            "book_name": book_name,
+                            "book_path": root,
+                            "book_type": extension.lower(),
+                            "add_time": date,
+                        })
 
-            # 如果没有找到任何电子书文件，则显示提示信息     TODO 待分离：界面显示代码与数据处理代码耦合
-            if not books_found:
-                choose = QMessageBox.question(None, "提示",
-                                              f"未扫描到书籍文件，是否手动检查以下路径：\n{directory}？",
-                                              QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-                                              )
+            if not scan_info:
+                choose = QMessageBox.question(
+                    self,
+                    "提示",
+                    f"未扫描到书籍文件，是否手动检查以下路径：\n{directory}？",
+                    QMessageBox.StandardButton.Yes
+                    | QMessageBox.StandardButton.No,
+                )
                 if choose == QMessageBox.StandardButton.Yes:
-                    os.startfile(directory)  # 打开相应的文件夹
+                    os.startfile(directory)
+            else:
+                books = [
+                    BookRecord.from_mapping(book_info)
+                    for book_info in scan_info
+                ]
+                self.books_scanned.emit(books)
+                self.hide()
+                return
 
-            # 显示询问弹窗，让用户决定是否继续扫描其他文件夹
-            reply = QMessageBox.question(None,
-                                         "提示",
-                                         "扫描完成！是否继续扫描其他文件夹？",
-                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-                                         )
+            reply = QMessageBox.question(
+                self,
+                "提示",
+                "扫描完成！是否继续扫描其他文件夹？",
+                QMessageBox.StandardButton.Yes
+                | QMessageBox.StandardButton.No,
+            )
             if reply == QMessageBox.StandardButton.Yes:
-                # 用户选择继续扫描，则再次调用select_directory()方法
                 self.select_directory()
-            elif reply == QMessageBox.StandardButton.No:
-                # 用户选择结束扫描，则显示提示信息
+            else:
                 Tips.information_msg("扫描已结束！")
                 self.close()
-                # 目前已知问题：点击确定按钮后，窗口会关闭，但选择扫描路径的窗口仍然存在，需要手动关闭
 
-        # 扫描遇到错误的弹窗提示
         except FileNotFoundError:
             Tips.information_msg("系统找不到指定的文件，请重试。")
         except NotADirectoryError:
             Tips.information_msg("系统找不到指定的路径，请重试。")
         except PermissionError:
             Tips.information_msg("扫描路径无访问权限，请检查路径权限。")
-        else:
-            # 扫描未引发任何异常时，将扫描结果（存储在book_info字典中）写入数据库
-            self.write_into_database(scan_info)
-
-    def write_into_database(self, scan_info):
-        """将扫描结果写入数据库"""
-        db = DatabaseManager()
-        for i in scan_info:
-            db.add_book(**i)  # 将扫描结果写入数据库
-        db.close()
 
 
 class Books:
