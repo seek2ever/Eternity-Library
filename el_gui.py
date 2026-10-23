@@ -58,12 +58,12 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         # 初始化缓存与后台查询线程
-        self._books_cache: list[BookRecord] | None = None
+        self._books_cache: list[BookRecord] | None
         self._cache_timestamp = 0.0
 
-        self._pending_scan_books: list[BookRecord] | None = None
+        self._pending_scan_books: list[BookRecord] | None
         self._scan_in_progress = False
-        self._scan_dialog: ScanBookFiles | None = None
+        self._scan_dialog: ScanBookFiles
         self._setup_book_worker()
 
         self.column_titles = list(BOOK_COLUMN_TITLES)
@@ -75,20 +75,20 @@ class MainWindow(QMainWindow):
         self.table_delegate = TableDelegate()
 
         # 窗口组件
-        self.splitter: QSplitter | None = None
-        self.statusbar: QStatusBar | None = None
+        self.splitter: QSplitter
+        self.statusbar: QStatusBar
         # 左右面板实例属性
-        self.left_panel: QWidget | None = None
-        self.right_stack: QStackedWidget | None = None
+        self.left_panel: QWidget
+        self.right_stack: QStackedWidget
         # 左侧面板组件
-        self.toggle_view_btn: QPushButton | None = None
-        self.category_list: QListWidget | None = None
-        self.scan_button: QPushButton | None = None
-        self.clear_button: QPushButton | None = None
-        self.close_button: QPushButton | None = None
+        self.toggle_view_btn: QPushButton
+        self.category_list: QListWidget
+        self.scan_button: QPushButton
+        self.clear_button: QPushButton
+        self.close_button: QPushButton
         # 右侧视图组件（封面卡片视图+表格视图）
-        self.cover_card_view: QListView | None = None
-        self.table_view: QTableView | None = None
+        self.cover_card_view: QListView
+        self.table_view: QTableView
 
         self.setup_ui()
 
@@ -157,13 +157,13 @@ class MainWindow(QMainWindow):
         icon = QtGui.QIcon()
         icon.addPixmap(
             QtGui.QPixmap("images/icons/book_icon.png"),
-            QtGui.QIcon.Normal,
-            QtGui.QIcon.Off
+            QtGui.QIcon.Mode.Normal,
+            QtGui.QIcon.State.Off
         )
         self.setWindowIcon(icon)
 
         # 创建QSplitter作为左右分区的容器
-        self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.left_panel = self._create_left_panel()
 
         # 创建右侧视图容器
@@ -231,8 +231,8 @@ class MainWindow(QMainWindow):
 
         # 分隔线
         line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Raised)
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Raised)
         layout.addWidget(line)
 
         # 分类筛选区，后续计划改进为标签（类型名称）+拉下列表框的方式筛选
@@ -255,8 +255,8 @@ class MainWindow(QMainWindow):
 
         # 分隔线
         line_2 = QFrame()
-        line_2.setFrameShape(QFrame.HLine)
-        line_2.setFrameShadow(QFrame.Sunken)
+        line_2.setFrameShape(QFrame.Shape.HLine)
+        line_2.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(line_2)
 
         # 快捷操作区
@@ -291,6 +291,9 @@ class MainWindow(QMainWindow):
         # TODO: 暂时使用使用默认的显示和编辑行为，后续再完善自定义delegate以便支持更复杂的显示和编辑行为
         # self.table_view.setItemDelegate(self.table_delegate)
         self.table_view.setShowGrid(True)
+        # TODO: 滚动时依然是按项滚动而不是像素滚动，后续需要优化
+        self.cover_card_view.setHorizontalScrollMode(QListView.ScrollMode.ScrollPerPixel)
+        self.cover_card_view.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
         return self.table_view
 
     def _create_cover_view(self) -> QWidget:
@@ -310,9 +313,9 @@ class MainWindow(QMainWindow):
         self.cover_card_view.setModel(self.cover_model)
         self.cover_card_view.setItemDelegate(self.cover_delegate)
 
-        self.cover_card_view.setViewMode(QListView.IconMode)
-        self.cover_card_view.setMovement(QListView.Static)
-        self.cover_card_view.setResizeMode(QListView.Adjust)
+        self.cover_card_view.setViewMode(QListView.ViewMode.IconMode)
+        self.cover_card_view.setMovement(QListView.Movement.Static)
+        self.cover_card_view.setResizeMode(QListView.ResizeMode.Adjust)
         self.cover_card_view.setWrapping(True)
         self.cover_card_view.setSpacing(4)
         self.cover_card_view.setGridSize(QSize(
@@ -321,10 +324,10 @@ class MainWindow(QMainWindow):
         ))
         self.cover_card_view.setUniformItemSizes(True)
 
-        self.cover_card_view.setFrameShape(QFrame.NoFrame)
-        self.cover_card_view.setBackgroundRole(QtGui.QPalette.Base)
-        self.cover_card_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.cover_card_view.setVerticalScrollMode(QListView.ScrollPerPixel)
+        self.cover_card_view.setFrameShape(QFrame.Shape.NoFrame)
+        self.cover_card_view.setBackgroundRole(QtGui.QPalette.ColorRole.Base)
+        self.cover_card_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.cover_card_view.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
 
         self.cover_card_view.clicked.connect(self._on_cover_card_clicked)
 
@@ -450,28 +453,28 @@ class MainWindow(QMainWindow):
         duplicate_actions: dict[int, str] = {}
         for index, book_name in duplicates:
             message = QMessageBox(self)
-            message.setIcon(QMessageBox.Question)
+            message.setIcon(QMessageBox.Icon.Question)
             message.setText(f"检测到重复书籍：{book_name}")
             message.setInformativeText(
                 "选择的处理方式将用于这一条重复记录。"
             )
             message.setStandardButtons(
-                QMessageBox.Yes
-                | QMessageBox.No
-                | QMessageBox.Ignore
-                | QMessageBox.Cancel
+                QMessageBox.StandardButton.Yes
+                | QMessageBox.StandardButton.No
+                | QMessageBox.StandardButton.Ignore
+                | QMessageBox.StandardButton.Cancel
             )
-            message.setButtonText(QMessageBox.Yes, "覆盖")
-            message.setButtonText(QMessageBox.No, "重命名")
-            message.setButtonText(QMessageBox.Ignore, "跳过")
-            message.setButtonText(QMessageBox.Cancel, "取消整个批次")
+            message.setButtonText(QMessageBox.StandardButton.Yes, "覆盖")
+            message.setButtonText(QMessageBox.StandardButton.No, "重命名")
+            message.setButtonText(QMessageBox.StandardButton.Ignore, "跳过")
+            message.setButtonText(QMessageBox.StandardButton.Cancel, "取消整个批次")
 
             choice = message.exec()
-            if choice == QMessageBox.Yes:
+            if choice == QMessageBox.StandardButton.Yes:
                 duplicate_actions[index] = "overwrite"
-            elif choice == QMessageBox.No:
+            elif choice == QMessageBox.StandardButton.No:
                 duplicate_actions[index] = "rename"
-            elif choice == QMessageBox.Ignore:
+            elif choice == QMessageBox.StandardButton.Ignore:
                 duplicate_actions[index] = "skip"
             else:
                 self._finish_scan_batch()

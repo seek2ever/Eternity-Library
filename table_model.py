@@ -23,11 +23,11 @@ class BookTableModel(QAbstractTableModel):
     """表格视图的数据模型"""
 
     # 自定义 data role
-    BookIdRole = Qt.UserRole + 1  # book_id
-    BookNameRole = Qt.UserRole + 2  # book_name
-    AuthorRole = Qt.UserRole + 3  # author
-    BookTypeRole = Qt.UserRole + 4  # book_type
-    CoverPathRole = Qt.UserRole + 5  # 封面图片路径（预留）
+    BookIdRole = Qt.ItemDataRole.UserRole + 1       # book_id
+    BookNameRole = Qt.ItemDataRole.UserRole + 2     # book_name
+    AuthorRole = Qt.ItemDataRole.UserRole + 3       # author
+    BookTypeRole = Qt.ItemDataRole.UserRole + 4     # book_type
+    CoverPathRole = Qt.ItemDataRole.UserRole + 5    # 封面图片路径（预留）
 
     def __init__(self, column_titles=None, parent=None):
         super().__init__(parent)
@@ -51,7 +51,7 @@ class BookTableModel(QAbstractTableModel):
         """返回表格的列数"""
         return len(self._table_books[0]) if self._table_books else 0
 
-    def data(self, index, role=Qt.DisplayRole):
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         """返回指定单元格的数据"""
         if not index.isValid():
             return None
@@ -61,7 +61,7 @@ class BookTableModel(QAbstractTableModel):
         if not (0 <= row < self.rowCount() and 0 <= column < self.columnCount()):
             return None
 
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             return self._table_books[row][column]
         elif role == self.BookIdRole:
             return self._table_books[row][BOOK_ID_INDEX]
@@ -76,9 +76,9 @@ class BookTableModel(QAbstractTableModel):
 
         return None
 
-    def headerData(self, section, orientation, /, role=Qt.DisplayRole):
-        if role == Qt.DisplayRole:
-            if orientation == Qt.Horizontal:
+    def headerData(self, section, orientation, /, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole:
+            if orientation == Qt.Orientation.Horizontal:
                 if 0 <= section < len(self._column_titles):
                     return self._column_titles[section]
                 return None
@@ -87,22 +87,31 @@ class BookTableModel(QAbstractTableModel):
                 return str(section + 1)
         return None
 
-    def setData(self, index, value: typing.Any, /, role: int = Qt.ItemDataRole.EditRole) -> bool:
+    def setData(
+            self,
+            index,
+            value: typing.Any, /,
+            role: int = Qt.ItemDataRole.EditRole
+    ) -> bool:
         if not index.isValid():
             return False
 
         row = index.row()
         column = index.column()
         if (
-                role != Qt.EditRole
+                role != Qt.ItemDataRole.EditRole
                 or not (0 <= row < self.rowCount())
                 or not (0 <= column < self.columnCount())
         ):
             return False
 
         self._table_books[row][column] = value
-        # 两个index分别表示左上角单元格、右下角单元格，Qt.DisplayRole：用于显示的内容发生变化；Qt.EditRole：用于编辑的内容发生变化。
-        self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
+        # 两个index分别表示左上角单元格、右下角单元格，
+        # Qt.ItemDataRole.DisplayRole：用于显示的内容发生变化；
+        # Qt.ItemDataRole.EditRole：用于编辑的内容发生变化。
+        self.dataChanged.emit(
+            index, index, [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]
+        )
         return True
 
     def flags(self, index):
@@ -111,5 +120,5 @@ class BookTableModel(QAbstractTableModel):
             return None
         flag = super().flags(index)
         # 设置单元格为可编辑
-        flag = flag | Qt.ItemIsEditable
+        flag = flag | Qt.ItemFlag.ItemIsEditable
         return flag
