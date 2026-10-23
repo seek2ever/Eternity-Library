@@ -46,10 +46,10 @@ from table_delegate import TableDelegate
 
 class MainWindow(QMainWindow):
     request_initialize = Signal()
-    request_fetch_all = Signal()
-    request_fetch_by_type = Signal(str)
-    request_fetch_by_status = Signal(str)
-    request_fetch_by_author = Signal(str)
+    request_all = Signal()
+    request_by_type = Signal(str)
+    request_by_status = Signal(str)
+    request_by_author = Signal(str)
     request_close_database = Signal()
     request_find_duplicates = Signal(object)
     request_insert_books = Signal(object, object)
@@ -91,53 +91,57 @@ class MainWindow(QMainWindow):
 
         self.setup_ui()
 
-        def _setup_book_worker(self) -> None:
+    def _setup_book_worker(self) -> None:
         """创建统一数据库线程，并连接读取及批量写入请求。"""
         self._database_thread = QThread(self)
-        self._database_worker = DatabaseWorker()
-        self._database_worker.moveToThread(self._database_thread)
+        self._worker = DatabaseWorker()
+        self._worker.moveToThread(self._database_thread)
 
-        self._database_worker.initialized.connect(
+        # 工作线程信号 -> 主线程槽函数
+        self._worker.initialized.connect(
             self._on_database_initialized
         )
-        self._database_worker.books_ready.connect(self._on_books_loaded)
-        self._database_worker.query_error.connect(self._on_query_error)
-        self._database_worker.duplicates_ready.connect(
+        self._worker.books_ready.connect(self._on_books_loaded)
+        self._worker.query_error.connect(self._on_query_error)
+        self._worker.duplicates_ready.connect(
             self._on_duplicates_ready
         )
-        self._database_worker.write_finished.connect(
+        self._worker.write_finished.connect(
             self._on_write_finished
         )
-        self._database_worker.write_error.connect(self._on_write_error)
+        self._worker.write_error.connect(self._on_write_error)
 
+        # 主线程信号 -> 工作线程槽函数
         self.request_initialize.connect(
-            self._database_worker.initialize
+            self._worker.initialize
         )
-        self.request_fetch_all.connect(
-            self._database_worker.fetch_all_books
+        self.request_all.connect(
+            self._worker.fetch_all_books
         )
-        self.request_fetch_by_type.connect(
-            self._database_worker.fetch_books_by_type
+        self.request_by_type.connect(
+            self._worker.fetch_books_by_type
         )
-        self.request_fetch_by_status.connect(
-            self._database_worker.fetch_books_by_status
+        self.request_by_status.connect(
+            self._worker.fetch_books_by_status
         )
-        self.request_fetch_by_author.connect(
-            self._database_worker.fetch_books_by_author
+        self.request_by_author.connect(
+            self._worker.fetch_books_by_author
         )
         self.request_find_duplicates.connect(
-            self._database_worker.find_batch_duplicates
+            self._worker.find_batch_duplicates
         )
         self.request_insert_books.connect(
-            self._database_worker.insert_books
+            self._worker.insert_books
         )
         self.request_close_database.connect(
-            self._database_worker.close_database
+            self._worker.close_database
         )
 
+        # 工作线程结束时安全清理__worker对象
         self._database_thread.finished.connect(
-            self._database_worker.deleteLater
+            self._worker.deleteLater
         )
+
         self._database_thread.start()
         self.request_initialize.emit()
 
@@ -358,7 +362,7 @@ class MainWindow(QMainWindow):
             self._on_books_loaded(self._books_cache)
             return
 
-        self.request_fetch_all.emit()
+        self.request_all.emit()
 
     def _on_query_error(self, error_msg: str) -> None:
         """所有数据库读取错误都在主线程提示用户。"""
@@ -370,7 +374,7 @@ class MainWindow(QMainWindow):
         """Worker完成连接和建表后，才允许发出查询请求。"""
         if self.statusbar is not None:
             self.statusbar.showMessage("数据库已就绪")
-        self.request_fetch_all.emit()
+        self.request_all.emit()
 
     def _on_books_loaded(self, books: list[BookRecord]) -> None:
         """在主线程接收结果并刷新两个 Model。"""
@@ -389,17 +393,17 @@ class MainWindow(QMainWindow):
     def load_books_by_type(self, book_type: str) -> None:
         """由界面传入具体类型，例如“小说”。"""
         self._books_cache = None
-        self.request_fetch_by_type.emit(book_type)
+        self.request_by_type.emit(book_type)
 
     def load_books_by_status(self, read_status: str) -> None:
         """由界面传入具体阅读状态，例如“正在阅读”。"""
         self._books_cache = None
-        self.request_fetch_by_status.emit(read_status)
+        self.request_by_status.emit(read_status)
 
     def load_books_by_author(self, author: str) -> None:
         """由界面传入具体作者名称。"""
         self._books_cache = None
-        self.request_fetch_by_author.emit(author)
+        self.request_by_author.emit(author)
 
         def scan_books(self) -> None:
         """打开扫描窗口；每次只允许提交一个扫描批次。"""
@@ -499,7 +503,7 @@ class MainWindow(QMainWindow):
                 f"批量入库完成：新增 {added_count} 本，"
                 f"覆盖 {overwritten_count} 本，跳过 {skipped_count} 本"
             )
-        self.request_fetch_all.emit()
+        self.request_all.emit()
 
         if self._scan_dialog is not None:
             reply = QMessageBox.question(

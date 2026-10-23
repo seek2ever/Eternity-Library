@@ -320,54 +320,56 @@ from book_record import BookRecord
 
 ```python
     def _setup_book_worker(self) -> None:
-        """创建统一数据库线程，并连接读取及批量写入请求。"""
-        self._database_thread = QThread(self)
-        self._database_worker = DatabaseWorker()
-        self._database_worker.moveToThread(self._database_thread)
 
-        self._database_worker.initialized.connect(
-            self._on_database_initialized
-        )
-        self._database_worker.books_ready.connect(self._on_books_loaded)
-        self._database_worker.query_error.connect(self._on_query_error)
-        self._database_worker.duplicates_ready.connect(
-            self._on_duplicates_ready
-        )
-        self._database_worker.write_finished.connect(
-            self._on_write_finished
-        )
-        self._database_worker.write_error.connect(self._on_write_error)
 
-        self.request_initialize.connect(
-            self._database_worker.initialize
-        )
-        self.request_fetch_all.connect(
-            self._database_worker.fetch_all_books
-        )
-        self.request_fetch_by_type.connect(
-            self._database_worker.fetch_books_by_type
-        )
-        self.request_fetch_by_status.connect(
-            self._database_worker.fetch_books_by_status
-        )
-        self.request_fetch_by_author.connect(
-            self._database_worker.fetch_books_by_author
-        )
-        self.request_find_duplicates.connect(
-            self._database_worker.find_batch_duplicates
-        )
-        self.request_insert_books.connect(
-            self._database_worker.insert_books
-        )
-        self.request_close_database.connect(
-            self._database_worker.close_database
-        )
+"""创建统一数据库线程，并连接读取及批量写入请求。"""
+self._database_thread = QThread(self)
+self._worker = DatabaseWorker()
+self._worker.moveToThread(self._database_thread)
 
-        self._database_thread.finished.connect(
-            self._database_worker.deleteLater
-        )
-        self._database_thread.start()
-        self.request_initialize.emit()
+self._worker.initialized.connect(
+    self._on_database_initialized
+)
+self._worker.books_ready.connect(self._on_books_loaded)
+self._worker.query_error.connect(self._on_query_error)
+self._worker.duplicates_ready.connect(
+    self._on_duplicates_ready
+)
+self._worker.write_finished.connect(
+    self._on_write_finished
+)
+self._worker.write_error.connect(self._on_write_error)
+
+self.request_initialize.connect(
+    self._worker.initialize
+)
+self.request_all.connect(
+    self._worker.fetch_all_books
+)
+self.request_by_type.connect(
+    self._worker.fetch_books_by_type
+)
+self.request_by_status.connect(
+    self._worker.fetch_books_by_status
+)
+self.request_by_author.connect(
+    self._worker.fetch_books_by_author
+)
+self.request_find_duplicates.connect(
+    self._worker.find_batch_duplicates
+)
+self.request_insert_books.connect(
+    self._worker.insert_books
+)
+self.request_close_database.connect(
+    self._worker.close_database
+)
+
+self._database_thread.finished.connect(
+    self._worker.deleteLater
+)
+self._database_thread.start()
+self.request_initialize.emit()
 ```
 
 ### 4.4 替换 `scan_books`，并增加扫描/写入结果槽
@@ -376,134 +378,139 @@ from book_record import BookRecord
 
 ```python
     def scan_books(self) -> None:
-        """打开扫描窗口；每次只允许提交一个扫描批次。"""
-        if self._scan_in_progress:
-            return
+    """打开扫描窗口；每次只允许提交一个扫描批次。"""
+    if self._scan_in_progress:
+        return
 
-        self._scan_dialog = ScanBookFiles(self)
-        self._scan_dialog.books_scanned.connect(
-            self._on_scan_books_found
+    self._scan_dialog = ScanBookFiles(self)
+    self._scan_dialog.books_scanned.connect(
+        self._on_scan_books_found
+    )
+    self._scan_dialog.show()
+    self._scan_dialog.select_directory()
+
+
+def _on_scan_books_found(self, books: object) -> None:
+    """接收扫描器生成的记录，并在 Worker 中检查重复项。"""
+    if not isinstance(books, list):
+        self._on_write_error("扫描器返回的数据格式不正确。")
+        return
+    if not books:
+        if self.statusbar is not None:
+            self.statusbar.showMessage("没有扫描到可入库的书籍")
+        return
+    if any(not isinstance(book, BookRecord) for book in books):
+        self._on_write_error("扫描器返回的数据中包含无效书籍记录。")
+        return
+
+    self._pending_scan_books = books
+    self._scan_in_progress = True
+    if self.scan_button is not None:
+        self.scan_button.setEnabled(False)
+    if self.statusbar is not None:
+        self.statusbar.showMessage(
+            f"正在检查 {len(books)} 本扫描书籍……"
         )
-        self._scan_dialog.show()
-        self._scan_dialog.select_directory()
+    self.request_find_duplicates.emit(books)
 
-    def _on_scan_books_found(self, books: object) -> None:
-        """接收扫描器生成的记录，并在 Worker 中检查重复项。"""
-        if not isinstance(books, list):
-            self._on_write_error("扫描器返回的数据格式不正确。")
-            return
-        if not books:
+
+def _on_duplicates_ready(self, duplicates: list) -> None:
+    """由主线程逐本询问重复书籍的处理方式。"""
+    if self._pending_scan_books is None:
+        self._on_write_error("收到重复检查结果时，没有待处理的扫描批次。")
+        return
+
+    duplicate_actions: dict[int, str] = {}
+    for index, book_name in duplicates:
+        message = QMessageBox(self)
+        message.setIcon(QMessageBox.Question)
+        message.setText(f"检测到重复书籍：{book_name}")
+        message.setInformativeText(
+            "选择的处理方式将用于这一条重复记录。"
+        )
+        message.setStandardButtons(
+            QMessageBox.Yes
+            | QMessageBox.No
+            | QMessageBox.Ignore
+            | QMessageBox.Cancel
+        )
+        message.setButtonText(QMessageBox.Yes, "覆盖")
+        message.setButtonText(QMessageBox.No, "重命名")
+        message.setButtonText(QMessageBox.Ignore, "跳过")
+        message.setButtonText(QMessageBox.Cancel, "取消整个批次")
+
+        choice = message.exec()
+        if choice == QMessageBox.Yes:
+            duplicate_actions[index] = "overwrite"
+        elif choice == QMessageBox.No:
+            duplicate_actions[index] = "rename"
+        elif choice == QMessageBox.Ignore:
+            duplicate_actions[index] = "skip"
+        else:
+            self._finish_scan_batch()
             if self.statusbar is not None:
-                self.statusbar.showMessage("没有扫描到可入库的书籍")
-            return
-        if any(not isinstance(book, BookRecord) for book in books):
-            self._on_write_error("扫描器返回的数据中包含无效书籍记录。")
-            return
-
-        self._pending_scan_books = books
-        self._scan_in_progress = True
-        if self.scan_button is not None:
-            self.scan_button.setEnabled(False)
-        if self.statusbar is not None:
-            self.statusbar.showMessage(
-                f"正在检查 {len(books)} 本扫描书籍……"
-            )
-        self.request_find_duplicates.emit(books)
-
-    def _on_duplicates_ready(self, duplicates: list) -> None:
-        """由主线程逐本询问重复书籍的处理方式。"""
-        if self._pending_scan_books is None:
-            self._on_write_error("收到重复检查结果时，没有待处理的扫描批次。")
+                self.statusbar.showMessage("已取消本次批量入库")
+            if self._scan_dialog is not None:
+                self._scan_dialog.close()
             return
 
-        duplicate_actions: dict[int, str] = {}
-        for index, book_name in duplicates:
-            message = QMessageBox(self)
-            message.setIcon(QMessageBox.Question)
-            message.setText(f"检测到重复书籍：{book_name}")
-            message.setInformativeText(
-                "选择的处理方式将用于这一条重复记录。"
-            )
-            message.setStandardButtons(
-                QMessageBox.Yes
-                | QMessageBox.No
-                | QMessageBox.Ignore
-                | QMessageBox.Cancel
-            )
-            message.setButtonText(QMessageBox.Yes, "覆盖")
-            message.setButtonText(QMessageBox.No, "重命名")
-            message.setButtonText(QMessageBox.Ignore, "跳过")
-            message.setButtonText(QMessageBox.Cancel, "取消整个批次")
+    self.request_insert_books.emit(
+        self._pending_scan_books,
+        duplicate_actions,
+    )
+    if self.statusbar is not None:
+        self.statusbar.showMessage("正在批量写入数据库……")
 
-            choice = message.exec()
-            if choice == QMessageBox.Yes:
-                duplicate_actions[index] = "overwrite"
-            elif choice == QMessageBox.No:
-                duplicate_actions[index] = "rename"
-            elif choice == QMessageBox.Ignore:
-                duplicate_actions[index] = "skip"
-            else:
-                self._finish_scan_batch()
-                if self.statusbar is not None:
-                    self.statusbar.showMessage("已取消本次批量入库")
-                if self._scan_dialog is not None:
-                    self._scan_dialog.close()
-                return
 
-        self.request_insert_books.emit(
-            self._pending_scan_books,
-            duplicate_actions,
-        )
-        if self.statusbar is not None:
-            self.statusbar.showMessage("正在批量写入数据库……")
-
-    def _on_write_finished(
+def _on_write_finished(
         self,
         added_count: int,
         skipped_count: int,
         overwritten_count: int,
-    ) -> None:
-        """写入成功后清除缓存，并让两个 Model 从数据库刷新。"""
-        self._finish_scan_batch()
-        self._books_cache = None
-        self._cache_timestamp = 0.0
+) -> None:
+    """写入成功后清除缓存，并让两个 Model 从数据库刷新。"""
+    self._finish_scan_batch()
+    self._books_cache = None
+    self._cache_timestamp = 0.0
 
-        if self.statusbar is not None:
-            self.statusbar.showMessage(
-                f"批量入库完成：新增 {added_count} 本，"
-                f"覆盖 {overwritten_count} 本，跳过 {skipped_count} 本"
-            )
-        self.request_fetch_all.emit()
+    if self.statusbar is not None:
+        self.statusbar.showMessage(
+            f"批量入库完成：新增 {added_count} 本，"
+            f"覆盖 {overwritten_count} 本，跳过 {skipped_count} 本"
+        )
+    self.request_all.emit()
 
-        if self._scan_dialog is not None:
-            reply = QMessageBox.question(
-                self,
-                "扫描完成",
-                "本批书籍已入库，是否继续扫描其他文件夹？",
-                QMessageBox.StandardButton.Yes
-                | QMessageBox.StandardButton.No,
-            )
-            if reply == QMessageBox.StandardButton.Yes:
-                self._scan_dialog.show()
-                self._scan_dialog.select_directory()
-            else:
-                self._scan_dialog.close()
-
-    def _on_write_error(self, error_msg: str) -> None:
-        """写入或重复检查失败时结束批次并在主线程显示错误。"""
-        self._finish_scan_batch()
-        Tips.information_msg(error_msg)
-        if self.statusbar is not None:
-            self.statusbar.showMessage("批量入库失败")
-        if self._scan_dialog is not None:
+    if self._scan_dialog is not None:
+        reply = QMessageBox.question(
+            self,
+            "扫描完成",
+            "本批书籍已入库，是否继续扫描其他文件夹？",
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._scan_dialog.show()
+            self._scan_dialog.select_directory()
+        else:
             self._scan_dialog.close()
 
-    def _finish_scan_batch(self) -> None:
-        """释放当前扫描批次并恢复扫描按钮。"""
-        self._pending_scan_books = None
-        self._scan_in_progress = False
-        if self.scan_button is not None:
-            self.scan_button.setEnabled(True)
+
+def _on_write_error(self, error_msg: str) -> None:
+    """写入或重复检查失败时结束批次并在主线程显示错误。"""
+    self._finish_scan_batch()
+    Tips.information_msg(error_msg)
+    if self.statusbar is not None:
+        self.statusbar.showMessage("批量入库失败")
+    if self._scan_dialog is not None:
+        self._scan_dialog.close()
+
+
+def _finish_scan_batch(self) -> None:
+    """释放当前扫描批次并恢复扫描按钮。"""
+    self._pending_scan_books = None
+    self._scan_in_progress = False
+    if self.scan_button is not None:
+        self.scan_button.setEnabled(True)
 ```
 
 如果担心旧的查询结果在写入后覆盖新列表，可在 `books_ready` 的结果中增加请求编号；当前应用的筛选 UI 尚未接通，阶段 2 保持阶段 1 的加载流程，不额外引入请求编号机制。
