@@ -5,6 +5,7 @@ import sqlite3
 from typing import Union, Any
 from PySide6.QtCore import (
     QObject,
+    QThread,
     Signal,
     Slot,
 )
@@ -368,7 +369,7 @@ class DatabaseWorker(QObject):
         if books is not None:
             self.books_ready.emit(books)
     
-        def _book_name_exists(self, book_name: str) -> bool:
+    def _book_name_exists(self, book_name: str) -> bool:
         """检查当前连接中是否已有同名书籍。"""
         row = self.connection.execute(
             "SELECT 1 FROM books_information WHERE book_name = ? LIMIT 1",
@@ -541,6 +542,7 @@ class DatabaseWorker(QObject):
         """关闭数据库连接"""
         self._close_connection()
         self.database_closed.emit()
+        QThread.currentThread().quit()
 
 
 if __name__ == '__main__':

@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from books import ScanBookFiles
 from database import (
     DatabaseManager,
     DatabaseWorker,
@@ -405,12 +406,12 @@ class MainWindow(QMainWindow):
         self._books_cache = None
         self.request_by_author.emit(author)
 
-        def scan_books(self) -> None:
+    def scan_books(self) -> None:
         """打开扫描窗口；每次只允许提交一个扫描批次。"""
         if self._scan_in_progress:
             return
 
-        self._scan_dialog = ScanBookFiles(self)
+        self._scan_dialog = ScanBookFiles()
         self._scan_dialog.books_scanned.connect(
             self._on_scan_books_found
         )

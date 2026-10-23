@@ -31,7 +31,7 @@ class ScanBookFiles(QWidget):
     选择扫描路径的窗口，用户可以通过点击按钮选择扫描文件所在的路径，
     该窗口还会调用scan_book_files函数扫描文件夹中的电子书，并将结果写入文本文件
     """
-        books_scanned = Signal(object)
+    books_scanned = Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -61,7 +61,7 @@ class ScanBookFiles(QWidget):
             QMessageBox.warning(self, "提示", "未选择扫描路径！扫描已取消。", QMessageBox.StandardButton.Ok)
             self.close()
 
-        def scan_book_files(self, directory: str) -> None:
+    def scan_book_files(self, directory: str) -> None:
         """扫描目录并把记录交给主窗口，不在这里创建数据库连接。"""
         date = datetime.datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
         supported_extensions = (".pdf", ".doc", ".docx", ".epub", ".txt")
