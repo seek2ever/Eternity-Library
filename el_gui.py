@@ -31,7 +31,6 @@ from PySide6.QtWidgets import (
 
 from books import ScanBookFiles
 from database import (
-    DatabaseManager,
     DatabaseWorker,
 )
 from utils import Tips
@@ -198,8 +197,6 @@ class MainWindow(QMainWindow):
     def _resize_table_columns(self):
         """调整表格视图的列宽"""
         # TODO: 目前存在点击按钮调整列宽时主界面卡顿的情况，后续需优化
-        if self.table_view is None:
-            return
         self.table_view.resizeColumnsToContents()
         self.table_view.resizeRowsToContents()
         return

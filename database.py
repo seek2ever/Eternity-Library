@@ -305,7 +305,7 @@ class DatabaseWorker(QObject):
             self.connection.close()
             self.connection = None
 
-    def _select(self, sql: str, params: tuple = ()) -> list[BookRecord] | None:
+    def _select_all(self, sql: str, params: tuple = ()) -> list[BookRecord] | None:
         """执行一次参数化查询，并把结果转换成阶段0的数据结果（BookRecord列表）"""
         if self.connection is None:
             self.query_error.emit("数据库连接未初始化，无法查询。")
@@ -319,10 +319,28 @@ class DatabaseWorker(QObject):
             self.query_error.emit(f"数据转换失败：{error}")
         return None
 
+    def _select_one(self, sql: str, params: tuple = ()) -> BookRecord | None:
+        """执行一次单行查询，返回 BookRecord 或 None。"""
+        if self.connection is None:
+            self.query_error.emit("数据库连接未初始化，无法查询。")
+            return None
+        try:
+            row = self.connection.execute(sql, params).fetchone()
+        except sqlite3.Error as e:
+            self.query_error.emit(f"查询失败：{e}")
+            return None
+        if row is None:
+            return None
+        try:
+            return BookRecord.from_row(row)
+        except ValueError as error:
+            self.query_error.emit(f"数据转换失败：{error}")
+            return None
+
     @Slot()
     def fetch_all_books(self) -> None:
         """查询全部书籍，空数据库也会发送books_ready([])。"""
-        books = self._select(
+        books = self._select_all(
             "SELECT * FROM books_information ORDER BY book_id"
         )
         if books is not None:
@@ -331,7 +349,7 @@ class DatabaseWorker(QObject):
     @Slot(str)
     def fetch_books_by_type(self, book_type: str) -> None:
         """按书籍类型精确筛选。"""
-        books = self._select(
+        books = self._select_all(
             """
             SELECT * FROM books_information WHERE book_type=? 
             ORDER BY book_id
@@ -344,7 +362,7 @@ class DatabaseWorker(QObject):
     @Slot(str)
     def fetch_books_by_status(self, read_status: str) -> None:
         """按阅读状态精确筛选。"""
-        books = self._select(
+        books = self._select_all(
             """
             SELECT * FROM books_information
             WHERE read_status = ?
@@ -358,7 +376,7 @@ class DatabaseWorker(QObject):
     @Slot(str)
     def fetch_books_by_author(self, author: str) -> None:
         """按作者精确筛选。"""
-        books = self._select(
+        books = self._select_all(
             """
             SELECT * FROM books_information
             WHERE author = ?

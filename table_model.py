@@ -49,7 +49,7 @@ class BookTableModel(QAbstractTableModel):
 
     def columnCount(self, parent=QModelIndex()):
         """返回表格的列数"""
-        return len(self._table_books[0]) if self._table_books else 0
+        return len(self._column_titles)
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         """返回指定单元格的数据"""
