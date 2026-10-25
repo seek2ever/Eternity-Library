@@ -31,11 +31,11 @@ from PySide6.QtWidgets import (
 
 from books import ScanBookFiles
 from database import (
-    DatabaseManager,
     DatabaseWorker,
 )
 from utils import Tips
 from book_record import (
+    BOOK_COLUMNS,
     BOOK_COLUMN_TITLES,
     BookRecord,
 )
@@ -54,6 +54,8 @@ class MainWindow(QMainWindow):
     request_close_database = Signal()
     request_find_duplicates = Signal(object)
     request_insert_books = Signal(object, object)
+    request_update_book = Signal(int, str, object)
+    request_delete_book = Signal(int)
 
     def __init__(self):
         super().__init__()
@@ -71,8 +73,9 @@ class MainWindow(QMainWindow):
         # 实例化各个视图对应的数据模型和代理
         self.cover_model = CoverCardModel()
         self.cover_delegate = CoverCardDelegate()
-        self.table_model = BookTableModel(self.column_titles)
         self.table_delegate = TableDelegate()
+        self.table_model = BookTableModel(self.column_titles)
+        self.table_model.dataChanged.connect(self.on_table_data_changed)
 
         # 窗口组件
         self.splitter: QSplitter
@@ -111,6 +114,12 @@ class MainWindow(QMainWindow):
             self._on_write_finished
         )
         self._worker.write_error.connect(self._on_write_error)
+        self._worker.mutation_finished.connect(
+            self._on_mutation_finished
+        )
+        self._worker.mutation_error.connect(
+            self._on_mutation_error
+        )
 
         # 主线程信号 -> 工作线程槽函数
         self.request_initialize.connect(
@@ -133,6 +142,12 @@ class MainWindow(QMainWindow):
         )
         self.request_insert_books.connect(
             self._worker.insert_books
+        )
+        self.request_update_book.connect(
+            self._worker.update_book_field
+        )
+        self.request_delete_book.connect(
+            self._worker.delete_book_by_id
         )
         self.request_close_database.connect(
             self._worker.close_database
@@ -168,8 +183,8 @@ class MainWindow(QMainWindow):
 
         # 创建右侧视图容器
         self.right_stack = QStackedWidget()
-        cover_view_widget = self._create_cover_view()      # 封面视图，索引为0
-        table_view_widget = self._create_table_view()      # 表格视图，索引为1
+        cover_view_widget = self._create_cover_view()  # 封面视图，索引为0
+        table_view_widget = self._create_table_view()  # 表格视图，索引为1
         self.right_stack.addWidget(cover_view_widget)
         self.right_stack.addWidget(table_view_widget)
         # 设置默认视图（当前默认为封面视图），索引顺序与添加的顺序一致
@@ -178,8 +193,8 @@ class MainWindow(QMainWindow):
         # 将左右组件加入QSplitter
         self.splitter.addWidget(self.left_panel)
         self.splitter.addWidget(self.right_stack)
-        self.splitter.setStretchFactor(0, 1)    # 左侧比例
-        self.splitter.setStretchFactor(1, 3)    # 右侧比例（更大）
+        self.splitter.setStretchFactor(0, 1)  # 左侧比例
+        self.splitter.setStretchFactor(1, 3)  # 右侧比例（更大）
 
         self.setCentralWidget(self.splitter)
 
@@ -198,8 +213,6 @@ class MainWindow(QMainWindow):
     def _resize_table_columns(self):
         """调整表格视图的列宽"""
         # TODO: 目前存在点击按钮调整列宽时主界面卡顿的情况，后续需优化
-        if self.table_view is None:
-            return
         self.table_view.resizeColumnsToContents()
         self.table_view.resizeRowsToContents()
         return
@@ -268,6 +281,10 @@ class MainWindow(QMainWindow):
         self.scan_button.setFixedHeight(36)
         self.scan_button.clicked.connect(self.scan_books)
 
+        self.delete_button = QPushButton("删除选中书籍")
+        self.delete_button.setFixedHeight(36)
+        self.delete_button.clicked.connect(self._delete_selected_book)
+
         self.clear_button = QPushButton(self._translate("Not show", "取消显示"))
         self.clear_button.setFixedHeight(36)
         self.clear_button.clicked.connect(self.close_info)
@@ -278,6 +295,7 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(action_label)
         layout.addWidget(self.scan_button)
+        layout.addWidget(self.delete_button)
         # layout.addWidget(self.show_button)
         layout.addWidget(self.clear_button)
         layout.addWidget(self.close_button)
@@ -288,6 +306,12 @@ class MainWindow(QMainWindow):
     def _create_table_view(self) -> QTableView:
         self.table_view = QTableView()
         self.table_view.setModel(self.table_model)
+        self.table_view.setSelectionBehavior(
+            QTableView.SelectionBehavior.SelectRows
+        )
+        self.table_view.setSelectionMode(
+            QTableView.SelectionMode.SingleSelection
+        )
         # TODO: 暂时使用使用默认的显示和编辑行为，后续再完善自定义delegate以便支持更复杂的显示和编辑行为
         # self.table_view.setItemDelegate(self.table_delegate)
         self.table_view.setShowGrid(True)
@@ -333,6 +357,109 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(self.cover_card_view)
         return container
+
+    def on_table_data_changed(self, top_left, bottom_right, roles) -> None:
+        """把表格编辑转换成 Worker 更新请求。"""
+        if roles and Qt.ItemDataRole.EditRole not in roles:
+            return
+
+        for row in range(top_left.row(), bottom_right.row() + 1):
+            for column in range(top_left.column(), bottom_right.column() + 1):
+                if column == 0:
+                    continue
+
+                index = self.table_model.index(row, column)
+                book_id = self.table_model.data(
+                    index,
+                    role=BookTableModel.BookIdRole,
+                )
+                if not isinstance(book_id, int) or isinstance(book_id, bool):
+                    self._on_mutation_error(
+                        "当前书籍没有有效 ID，无法保存表格修改。"
+                    )
+                    return
+
+                field_name = BOOK_COLUMNS[column]
+                new_value = self.table_model.data(
+                    index,
+                    role=Qt.ItemDataRole.EditRole,
+                )
+                self.request_update_book.emit(
+                    book_id,
+                    field_name,
+                    new_value,
+                )
+
+        if self.statusbar is not None:
+            self.statusbar.showMessage("正在保存表格修改……")
+
+    def _delete_selected_book(self) -> None:
+        """确认后按书籍 ID 请求 Worker 删除选中记录。"""
+        selected_rows = self.table_view.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.information(
+                self,
+                "删除书籍",
+                "请先切换到表格视图并选择一本书。",
+            )
+            return
+
+        row = selected_rows[0].row()
+        index = self.table_model.index(row, 0)
+        book_id = self.table_model.data(
+            index,
+            role=BookTableModel.BookIdRole,
+        )
+        book_name = self.table_model.data(
+            self.table_model.index(row, 1),
+            role=Qt.ItemDataRole.DisplayRole,
+        )
+        if not isinstance(book_id, int) or isinstance(book_id, bool):
+            Tips.information_msg("选中书籍没有有效 ID，无法删除。")
+            return
+
+        answer = QMessageBox.question(
+            self,
+            "确认删除",
+            "确定从书库中删除《{}》吗？\n".format(book_name)
+            + "此操作不会删除本地电子书文件。",
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        self.delete_button.setEnabled(False)
+        self.request_delete_book.emit(book_id)
+        if self.statusbar is not None:
+            self.statusbar.showMessage("正在删除书籍……")
+
+    def _invalidate_books_cache(self) -> None:
+        """写操作完成后清除旧缓存，确保视图重新读取数据库。"""
+        self._books_cache = None
+        self._cache_timestamp = 0.0
+
+    def _on_mutation_finished(self, operation: str, book_id: int) -> None:
+        """修改成功后刷新封面和表格 Model。"""
+        self._invalidate_books_cache()
+        self.delete_button.setEnabled(True)
+
+        if self.statusbar is not None:
+            action = "更新" if operation == "update" else "删除"
+            self.statusbar.showMessage(
+                "书籍 {} 已{}，正在刷新视图……".format(book_id, action)
+            )
+        self.request_all.emit()
+
+    def _on_mutation_error(self, error_msg: str) -> None:
+        """修改失败时提示用户，并从数据库恢复 Model 的真实内容。"""
+        self._invalidate_books_cache()
+        self.delete_button.setEnabled(True)
+
+        Tips.information_msg(error_msg)
+        if self.statusbar is not None:
+            self.statusbar.showMessage("书籍修改失败，正在恢复数据……")
+        self.request_all.emit()
 
     def _on_cover_card_clicked(self, index) -> None:
         """点击封面卡片"""
@@ -492,10 +619,10 @@ class MainWindow(QMainWindow):
             self.statusbar.showMessage("正在批量写入数据库……")
 
     def _on_write_finished(
-        self,
-        added_count: int,
-        skipped_count: int,
-        overwritten_count: int,
+            self,
+            added_count: int,
+            skipped_count: int,
+            overwritten_count: int,
     ) -> None:
         """写入成功后清除缓存，并让两个 Model 从数据库刷新。"""
         self._finish_scan_batch()

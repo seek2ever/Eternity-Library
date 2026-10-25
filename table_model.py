@@ -49,7 +49,7 @@ class BookTableModel(QAbstractTableModel):
 
     def columnCount(self, parent=QModelIndex()):
         """返回表格的列数"""
-        return len(self._table_books[0]) if self._table_books else 0
+        return len(self._column_titles)
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         """返回指定单元格的数据"""
@@ -61,7 +61,10 @@ class BookTableModel(QAbstractTableModel):
         if not (0 <= row < self.rowCount() and 0 <= column < self.columnCount()):
             return None
 
-        if role == Qt.ItemDataRole.DisplayRole:
+        if role in (
+                Qt.ItemDataRole.DisplayRole,
+                Qt.ItemDataRole.EditRole,
+        ):
             return self._table_books[row][column]
         elif role == self.BookIdRole:
             return self._table_books[row][BOOK_ID_INDEX]
@@ -90,7 +93,7 @@ class BookTableModel(QAbstractTableModel):
     def setData(
             self,
             index,
-            value: typing.Any, /,
+            value: typing.Any,
             role: int = Qt.ItemDataRole.EditRole
     ) -> bool:
         if not index.isValid():
@@ -102,13 +105,13 @@ class BookTableModel(QAbstractTableModel):
                 role != Qt.ItemDataRole.EditRole
                 or not (0 <= row < self.rowCount())
                 or not (0 <= column < self.columnCount())
+                or column == BOOK_ID_INDEX
         ):
             return False
 
         self._table_books[row][column] = value
-        # 两个index分别表示左上角单元格、右下角单元格，
-        # Qt.ItemDataRole.DisplayRole：用于显示的内容发生变化；
-        # Qt.ItemDataRole.EditRole：用于编辑的内容发生变化。
+        # 告知视图：从index开始到index结束的矩形区域（可以只是一个单元格）的数据已改变
+        # DisplayRole：用于显示的内容发生变化；EditRole：用于编辑的内容发生变化。
         self.dataChanged.emit(
             index, index, [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]
         )
@@ -117,8 +120,8 @@ class BookTableModel(QAbstractTableModel):
     def flags(self, index):
         """返回指定单元格的标志，表示该单元格是否可编辑、可选中等"""
         if not index.isValid():
-            return None
+            return Qt.ItemFlag.NoItemFlags
         flag = super().flags(index)
-        # 设置单元格为可编辑
-        flag = flag | Qt.ItemFlag.ItemIsEditable
+        if index.column() != BOOK_ID_INDEX:
+            flag |= Qt.ItemFlag.ItemIsEditable
         return flag

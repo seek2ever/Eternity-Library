@@ -121,7 +121,7 @@ class BookRecord:
 
 
 def rows_to_records(rows: Iterable[Sequence[Any]]) -> list[BookRecord]:
-    """把多行SQLite查询结果转换成BookRecord列表。"""
+    """逐行调用from_row把多行SQLite查询结果转换成BookRecord列表。"""
     return [BookRecord.from_row(row) for row in rows]
 
 
