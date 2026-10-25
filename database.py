@@ -404,7 +404,7 @@ class DatabaseWorker(QObject):
 
         try:
             if not isinstance(books, list):
-                raise TypeError("待入库数据必须是 list[BookRecord]。")
+                raise TypeError("待入库数据必须是list[BookRecord]。")
 
             seen_names: set[str] = set()
             duplicates: list[tuple[int, str]] = []
@@ -425,10 +425,7 @@ class DatabaseWorker(QObject):
         self.duplicates_ready.emit(duplicates)
 
     @staticmethod
-    def _next_unique_book_name(
-        book_name: str,
-        occupied_names: set[str],
-    ) -> str:
+    def _next_unique_book_name(book_name: str, occupied_names: set[str]) -> str:
         """为重名书籍寻找第一个可用名称。"""
         suffix = 1
         while True:
@@ -455,7 +452,7 @@ class DatabaseWorker(QObject):
 
         try:
             if not isinstance(books, list):
-                raise TypeError("待入库数据必须是 list[BookRecord]。")
+                raise TypeError("待入库数据必须是list[BookRecord]。")
             if not isinstance(duplicate_actions, dict):
                 raise TypeError("重复书籍处理结果必须是字典。")
 

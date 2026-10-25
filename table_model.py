@@ -61,7 +61,10 @@ class BookTableModel(QAbstractTableModel):
         if not (0 <= row < self.rowCount() and 0 <= column < self.columnCount()):
             return None
 
-        if role == Qt.ItemDataRole.DisplayRole:
+        if role in (
+                Qt.ItemDataRole.DisplayRole,
+                Qt.ItemDataRole.EditRole,
+        ):
             return self._table_books[row][column]
         elif role == self.BookIdRole:
             return self._table_books[row][BOOK_ID_INDEX]
@@ -90,7 +93,7 @@ class BookTableModel(QAbstractTableModel):
     def setData(
             self,
             index,
-            value: typing.Any, /,
+            value: typing.Any,
             role: int = Qt.ItemDataRole.EditRole
     ) -> bool:
         if not index.isValid():
@@ -106,9 +109,8 @@ class BookTableModel(QAbstractTableModel):
             return False
 
         self._table_books[row][column] = value
-        # 两个index分别表示左上角单元格、右下角单元格，
-        # Qt.ItemDataRole.DisplayRole：用于显示的内容发生变化；
-        # Qt.ItemDataRole.EditRole：用于编辑的内容发生变化。
+        # 告知视图：从index开始到index结束的矩形区域（可以只是一个单元格）的数据已改变
+        # DisplayRole：用于显示的内容发生变化；EditRole：用于编辑的内容发生变化。
         self.dataChanged.emit(
             index, index, [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole]
         )

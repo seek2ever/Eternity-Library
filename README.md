@@ -77,6 +77,25 @@ sequenceDiagram
     V->>C: 请求封面数据
     V->>T: 请求表格数据
 ```
+## 视图更新数据流程  
+用户双击单元格触发编辑器，编辑器读取数据模型中的数据，用户修改后提交，数据模型更新数据并通知视图刷新显示。
+```mermaid
+    sequenceDiagram
+    autonumber
+    participant edit as 编辑器LineEdit
+    participant view as 视图view
+    participant model as 模型model
+    participant delegate as 代理delegate
+    view->>edit: 双击触发编辑
+    delegate->>model: data(index, role)<br/>读取EditRole
+    model->>delegate: 返回数据
+    delegate->>edit: 传递用于编辑的数据
+    edit->>delegate: 编辑后的新值
+    delegate->>model: setData(index, new_value, role)<br/>提交修改后的数据
+    model->>view: dataChanged信号()<br/>通知视图数据已修改
+    view->>model: on_table_data_changed()<br/>触发data()读取DisplayRole
+    model->>view: 返回修改后的数据<br/>重新显示在单元格中
+```
 ## ScanBookFiles类中scan_book_files方法
 1. any_books_found = False，用于判断是否有新书被添加，若有则在最后返回True，否则返回False；使用if not any_books_found进行判断时，若any_books_found为False（即if not any_books_found的值为Ture）时，满足Python的真值测试（在Python中，if后面的条件为True时执行后面的代码，否则跳过）；
 2. GUI界面部件增加布局后，数据库中的数据可以正常显示；  

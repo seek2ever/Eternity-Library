@@ -70,8 +70,9 @@ class MainWindow(QMainWindow):
         # 实例化各个视图对应的数据模型和代理
         self.cover_model = CoverCardModel()
         self.cover_delegate = CoverCardDelegate()
-        self.table_model = BookTableModel(self.column_titles)
         self.table_delegate = TableDelegate()
+        self.table_model = BookTableModel(self.column_titles)
+        self.table_model.dataChanged.connect(self.on_table_data_changed)
 
         # 窗口组件
         self.splitter: QSplitter
@@ -330,6 +331,22 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(self.cover_card_view)
         return container
+
+    def on_table_data_changed(self, top_left, bottom_right, roles):
+        for row in range(top_left.row(), bottom_right.row() + 1):
+            for column in range(top_left.column(), bottom_right.column() + 1):
+                index = self.table_model.index(row, column)
+                new_value = self.table_model.data(
+                    index,
+                    role=Qt.ItemDataRole.DisplayRole
+                )
+                changed_book = self.table_model.data(
+                    index,
+                    role=BookTableModel.BookIdRole
+                )
+                print(f"第 {row+1} 行、第 {column} 列的新值：{new_value}")
+                print(f"受影响的书籍ID：{changed_book}")
+
 
     def _on_cover_card_clicked(self, index) -> None:
         """点击封面卡片"""
