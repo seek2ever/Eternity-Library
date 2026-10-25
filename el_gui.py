@@ -307,7 +307,7 @@ class MainWindow(QMainWindow):
         self.table_view = QTableView()
         self.table_view.setModel(self.table_model)
         self.table_view.setSelectionBehavior(
-            QTableView.SelectionBehavior.SelectRows
+            QTableView.SelectionBehavior.SelectItems
         )
         self.table_view.setSelectionMode(
             QTableView.SelectionMode.SingleSelection
@@ -391,40 +391,33 @@ class MainWindow(QMainWindow):
                 )
 
         if self.statusbar is not None:
-            self.statusbar.showMessage("正在保存表格修改……")
+            self.statusbar.showMessage("正在保存修改……")
 
     def _delete_selected_book(self) -> None:
-        """确认后按书籍 ID 请求 Worker 删除选中记录。"""
-        selected_rows = self.table_view.selectionModel().selectedRows()
+        """确认后按书籍ID请求Worker删除选中记录。"""
+        selected_rows = self.table_view.selectionModel().selectedIndexes()
         if not selected_rows:
-            QMessageBox.information(
-                self,
-                "删除书籍",
-                "请先切换到表格视图并选择一本书。",
-            )
+            QMessageBox.information(self, "删除书籍", "需在表格视图选中书籍！")
             return
 
         row = selected_rows[0].row()
         index = self.table_model.index(row, 0)
-        book_id = self.table_model.data(
-            index,
-            role=BookTableModel.BookIdRole,
-        )
+        # 获取书籍ID和书名，用于确认删除操作
+        book_id = self.table_model.data(index, role=BookTableModel.BookIdRole)
         book_name = self.table_model.data(
             self.table_model.index(row, 1),
             role=Qt.ItemDataRole.DisplayRole,
         )
+        # bool类型的True/False也会被视为int类型（分别是0和1），因此需要排除
         if not isinstance(book_id, int) or isinstance(book_id, bool):
-            Tips.information_msg("选中书籍没有有效 ID，无法删除。")
+            Tips.information_msg("选中书籍不存在有效ID，无法删除！")
             return
 
         answer = QMessageBox.question(
             self,
             "确认删除",
-            "确定从书库中删除《{}》吗？\n".format(book_name)
-            + "此操作不会删除本地电子书文件。",
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.No,
+            f"确定从书库中删除《{book_name}》吗？\n此操作不会删除本地电子书文件。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
@@ -446,9 +439,7 @@ class MainWindow(QMainWindow):
 
         if self.statusbar is not None:
             action = "更新" if operation == "update" else "删除"
-            self.statusbar.showMessage(
-                "书籍 {} 已{}，正在刷新视图……".format(book_id, action)
-            )
+            self.statusbar.showMessage(f"书籍{book_id}已{action}，正在刷新视图……")
         self.request_all.emit()
 
     def _on_mutation_error(self, error_msg: str) -> None:
