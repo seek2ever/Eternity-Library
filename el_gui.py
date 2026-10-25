@@ -168,8 +168,8 @@ class MainWindow(QMainWindow):
 
         # 创建右侧视图容器
         self.right_stack = QStackedWidget()
-        cover_view_widget = self._create_cover_view()      # 封面视图，索引为0
-        table_view_widget = self._create_table_view()      # 表格视图，索引为1
+        cover_view_widget = self._create_cover_view()  # 封面视图，索引为0
+        table_view_widget = self._create_table_view()  # 表格视图，索引为1
         self.right_stack.addWidget(cover_view_widget)
         self.right_stack.addWidget(table_view_widget)
         # 设置默认视图（当前默认为封面视图），索引顺序与添加的顺序一致
@@ -178,8 +178,8 @@ class MainWindow(QMainWindow):
         # 将左右组件加入QSplitter
         self.splitter.addWidget(self.left_panel)
         self.splitter.addWidget(self.right_stack)
-        self.splitter.setStretchFactor(0, 1)    # 左侧比例
-        self.splitter.setStretchFactor(1, 3)    # 右侧比例（更大）
+        self.splitter.setStretchFactor(0, 1)  # 左侧比例
+        self.splitter.setStretchFactor(1, 3)  # 右侧比例（更大）
 
         self.setCentralWidget(self.splitter)
 
@@ -344,9 +344,7 @@ class MainWindow(QMainWindow):
                     index,
                     role=BookTableModel.BookIdRole
                 )
-                print(f"第 {row+1} 行、第 {column} 列的新值：{new_value}")
-                print(f"受影响的书籍ID：{changed_book}")
-
+                print(f"书籍ID：{changed_book}，第{row + 1}行、第{column}列的新值：{new_value}")
 
     def _on_cover_card_clicked(self, index) -> None:
         """点击封面卡片"""
@@ -506,10 +504,10 @@ class MainWindow(QMainWindow):
             self.statusbar.showMessage("正在批量写入数据库……")
 
     def _on_write_finished(
-        self,
-        added_count: int,
-        skipped_count: int,
-        overwritten_count: int,
+            self,
+            added_count: int,
+            skipped_count: int,
+            overwritten_count: int,
     ) -> None:
         """写入成功后清除缓存，并让两个 Model 从数据库刷新。"""
         self._finish_scan_batch()
