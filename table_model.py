@@ -105,6 +105,7 @@ class BookTableModel(QAbstractTableModel):
                 role != Qt.ItemDataRole.EditRole
                 or not (0 <= row < self.rowCount())
                 or not (0 <= column < self.columnCount())
+                or column == BOOK_ID_INDEX
         ):
             return False
 
@@ -119,8 +120,8 @@ class BookTableModel(QAbstractTableModel):
     def flags(self, index):
         """返回指定单元格的标志，表示该单元格是否可编辑、可选中等"""
         if not index.isValid():
-            return None
+            return Qt.ItemFlag.NoItemFlags
         flag = super().flags(index)
-        # 设置单元格为可编辑
-        flag = flag | Qt.ItemFlag.ItemIsEditable
+        if index.column() != BOOK_ID_INDEX:
+            flag |= Qt.ItemFlag.ItemIsEditable
         return flag

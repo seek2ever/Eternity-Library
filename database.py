@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 import sqlite3
 from typing import Union, Any
@@ -253,6 +254,8 @@ class DatabaseWorker(QObject):
     duplicates_ready = Signal(list)
     write_finished = Signal(int, int, int)  # 新增数、跳过数、覆盖数
     write_error = Signal(str)
+    mutation_finished = Signal(str, int)  # 操作类型（update/delete）、book_id
+    mutation_error = Signal(str)
 
     def __init__(self, db_name='books_information.db'):
         super().__init__()
@@ -551,6 +554,137 @@ class DatabaseWorker(QObject):
             skipped_count,
             overwritten_count,
         )
+
+    @Slot(int, str, object)
+    def update_book_field(self, book_id: int, field_name: str, value: object) -> None:
+        """按稳定ID更新一个字段；禁止更改 book_id。"""
+        if self.connection is None:
+            self.mutation_error.emit("数据库连接未初始化，无法更新书籍。")
+            return
+
+        try:
+            if not isinstance(book_id, int) or isinstance(book_id, bool):
+                raise ValueError("书籍ID必须是整数。")
+            if book_id <= 0:
+                raise ValueError("书籍ID无效。")
+
+            # book_id 是记录定位键，不允许通过表格编辑。
+            editable_columns = frozenset(BOOK_COLUMNS[1:])
+            if field_name not in editable_columns:
+                raise ValueError(f"不允许编辑字段：{field_name}")
+
+            if field_name in {"isbn", "pages"}:
+                if value is None or value == "":
+                    normalized_value = None
+                elif isinstance(value, bool):
+                    raise ValueError(f"{field_name} 必须是整数。")
+                else:
+                    if isinstance(value, float) and not value.is_integer():
+                        raise ValueError(f"{field_name} 必须是整数。")
+                    normalized_value = int(value)
+                    if field_name == "pages" and normalized_value < 0:
+                        raise ValueError("页数不能小于 0。")
+            elif field_name == "read_time":
+                if value is None or value == "":
+                    normalized_value = None
+                else:
+                    normalized_value = float(value)
+                    if not math.isfinite(normalized_value) or normalized_value < 0:
+                        raise ValueError("阅读时长必须是有限的非负数字。")
+            elif value is None:
+                normalized_value = None
+            elif isinstance(value, str):
+                normalized_value = value
+            else:
+                normalized_value = str(value)
+
+            if field_name == "book_name":
+                if not isinstance(normalized_value, str):
+                    raise ValueError("书名不能为空。")
+                normalized_value = normalized_value.strip()
+                if not normalized_value:
+                    raise ValueError("书名不能为空。")
+
+            with self.connection:
+                # 先锁定写事务，再做校验，避免检查后另一写入者抢先修改记录。
+                self.connection.execute("BEGIN IMMEDIATE")
+                matching_rows = self.connection.execute(
+                    "SELECT COUNT(*) FROM books_information WHERE book_id = ?",
+                    (book_id,),
+                ).fetchone()[0]
+                if matching_rows != 1:
+                    raise ValueError(
+                        f"书籍 ID {book_id} 对应 {matching_rows} 条记录，"
+                        "无法安全更新。"
+                    )
+
+                if field_name == "book_name":
+                    duplicate = self.connection.execute(
+                        """
+                        SELECT 1
+                        FROM books_information
+                        WHERE book_name = ? AND book_id <> ?
+                        LIMIT 1
+                        """,
+                        (normalized_value, book_id),
+                    ).fetchone()
+                    if duplicate is not None:
+                        raise ValueError(
+                            f"书名“{normalized_value}”已经存在，未保存修改。"
+                        )
+
+                # field_name 已经过白名单验证；字段值仍必须使用参数绑定。
+                cursor = self.connection.execute(
+                    f"UPDATE books_information SET {field_name} = ? "
+                    "WHERE book_id = ?",
+                    (normalized_value, book_id),
+                )
+                if cursor.rowcount != 1:
+                    raise ValueError("更新记录数量不为 1，已撤销本次操作。")
+
+        except (sqlite3.Error, OverflowError, TypeError, ValueError) as error:
+            self.mutation_error.emit(f"更新书籍失败：{error}")
+            return
+
+        self.mutation_finished.emit("update", book_id)
+
+    @Slot(int)
+    def delete_book_by_id(self, book_id: int) -> None:
+        """按唯一的book_id删除一条记录。"""
+        if self.connection is None:
+            self.mutation_error.emit("数据库连接未初始化，无法删除书籍。")
+            return
+
+        try:
+            if not isinstance(book_id, int) or isinstance(book_id, bool):
+                raise ValueError("书籍 ID 必须是整数。")
+            if book_id <= 0:
+                raise ValueError("书籍 ID 无效。")
+
+            with self.connection:
+                self.connection.execute("BEGIN IMMEDIATE")
+                matching_rows = self.connection.execute(
+                    "SELECT COUNT(*) FROM books_information WHERE book_id = ?",
+                    (book_id,),
+                ).fetchone()[0]
+                if matching_rows != 1:
+                    raise ValueError(
+                        f"书籍 ID {book_id} 对应 {matching_rows} 条记录，"
+                        "无法安全删除。"
+                    )
+
+                cursor = self.connection.execute(
+                    "DELETE FROM books_information WHERE book_id = ?",
+                    (book_id,),
+                )
+                if cursor.rowcount != 1:
+                    raise ValueError("删除记录数量不为 1，已撤销本次操作。")
+
+        except (sqlite3.Error, OverflowError, TypeError, ValueError) as error:
+            self.mutation_error.emit(f"删除书籍失败：{error}")
+            return
+
+        self.mutation_finished.emit("delete", book_id)
 
     @Slot()
     def close_database(self):
