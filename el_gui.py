@@ -6,6 +6,7 @@ import time
 from PySide6 import QtGui
 from PySide6.QtCore import (
     QCoreApplication,
+    QModelIndex,
     QSize,
     QThread,
     Qt,
@@ -358,9 +359,14 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.cover_card_view)
         return container
 
-    def on_table_data_changed(self, top_left, bottom_right, roles) -> None:
-        """把表格编辑转换成 Worker 更新请求。"""
-        if roles and Qt.ItemDataRole.EditRole not in roles:
+    def on_table_data_changed(
+            self,
+            top_left: QModelIndex,
+            bottom_right: QModelIndex,
+            roles: list[Qt.ItemDataRole],
+    ) -> None:
+        """把表格编辑转换成Worker更新请求。"""
+        if roles and (Qt.ItemDataRole.EditRole not in roles):
             return
 
         for row in range(top_left.row(), bottom_right.row() + 1):
@@ -536,11 +542,11 @@ class MainWindow(QMainWindow):
         self._scan_dialog.books_scanned.connect(
             self._on_scan_books_found
         )
-        self._scan_dialog.show()
+        # self._scan_dialog.show()
         self._scan_dialog.select_directory()
 
     def _on_scan_books_found(self, books: object) -> None:
-        """接收扫描器生成的记录，并在 Worker 中检查重复项。"""
+        """接收扫描器生成的记录，并在Worker中检查重复项。"""
         if not isinstance(books, list):
             self._on_write_error("扫描器返回的数据格式不正确。")
             return
@@ -565,7 +571,7 @@ class MainWindow(QMainWindow):
     def _on_duplicates_ready(self, duplicates: list) -> None:
         """由主线程逐本询问重复书籍的处理方式。"""
         if self._pending_scan_books is None:
-            self._on_write_error("收到重复检查结果时，没有待处理的扫描批次。")
+            self._on_write_error("没有待处理的重复文件。")
             return
 
         duplicate_actions: dict[int, str] = {}
@@ -582,10 +588,11 @@ class MainWindow(QMainWindow):
                 | QMessageBox.StandardButton.Ignore
                 | QMessageBox.StandardButton.Cancel
             )
-            message.setButtonText(QMessageBox.StandardButton.Yes, "覆盖")
-            message.setButtonText(QMessageBox.StandardButton.No, "重命名")
-            message.setButtonText(QMessageBox.StandardButton.Ignore, "跳过")
-            message.setButtonText(QMessageBox.StandardButton.Cancel, "取消整个批次")
+            # TODO: IDE提示以下几行代码存在过时风险，待后续改进
+            # message.setButtonText(QMessageBox.StandardButton.Yes, "覆盖")
+            # message.setButtonText(QMessageBox.StandardButton.No, "重命名")
+            # message.setButtonText(QMessageBox.StandardButton.Ignore, "跳过")
+            # message.setButtonText(QMessageBox.StandardButton.Cancel, "取消整个批次")
 
             choice = message.exec()
             if choice == QMessageBox.StandardButton.Yes:
