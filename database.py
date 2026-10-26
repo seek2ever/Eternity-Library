@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import random
 import sqlite3
-from typing import Union, Any
+from typing import Union
 from PySide6.QtCore import (
     QObject,
     QThread,
@@ -556,7 +556,12 @@ class DatabaseWorker(QObject):
         )
 
     @Slot(int, str, object)
-    def update_book_field(self, book_id: int, field_name: str, value: object) -> None:
+    def update_book_field(
+        self,
+        book_id: int,
+        field_name: str,
+        value: int | float | str | None,
+    ) -> None:
         """按稳定ID更新一个字段；禁止更改 book_id。"""
         if self.connection is None:
             self.mutation_error.emit("数据库连接未初始化，无法更新书籍。")
