@@ -55,7 +55,7 @@ class MainWindow(QMainWindow):
     request_close_database = Signal()
     request_find_duplicates = Signal(object)
     request_insert_books = Signal(object, object)
-    request_update_book = Signal(int, str, object)
+    request_update_book = Signal(object, str, object)
     request_delete_book = Signal(int)
 
     def __init__(self):
@@ -539,9 +539,7 @@ class MainWindow(QMainWindow):
             return
 
         self._scan_dialog = ScanBookFiles()
-        self._scan_dialog.books_scanned.connect(
-            self._on_scan_books_found
-        )
+        self._scan_dialog.books_scanned.connect(self._on_scan_books_found)
         # self._scan_dialog.show()
         self._scan_dialog.select_directory()
 
@@ -579,27 +577,25 @@ class MainWindow(QMainWindow):
             message = QMessageBox(self)
             message.setIcon(QMessageBox.Icon.Question)
             message.setText(f"检测到重复书籍：{book_name}")
-            message.setInformativeText(
-                "选择的处理方式将用于这一条重复记录。"
-            )
+            message.setInformativeText("应当如何处理？")
             message.setStandardButtons(
                 QMessageBox.StandardButton.Yes
                 | QMessageBox.StandardButton.No
                 | QMessageBox.StandardButton.Ignore
                 | QMessageBox.StandardButton.Cancel
             )
-            # TODO: IDE提示以下几行代码存在过时风险，待后续改进
-            # message.setButtonText(QMessageBox.StandardButton.Yes, "覆盖")
-            # message.setButtonText(QMessageBox.StandardButton.No, "重命名")
-            # message.setButtonText(QMessageBox.StandardButton.Ignore, "跳过")
-            # message.setButtonText(QMessageBox.StandardButton.Cancel, "取消整个批次")
+            # 添加自定义中文按钮
+            message.addButton("覆盖", QMessageBox.ButtonRole.YesRole)
+            message.addButton("重命名", QMessageBox.ButtonRole.NoRole)
+            message.addButton("跳过", QMessageBox.ButtonRole.ActionRole)
+            message.addButton("全部取消", QMessageBox.ButtonRole.RejectRole)
 
-            choice = message.exec()
-            if choice == QMessageBox.StandardButton.Yes:
+            choice = message.clickedButton()
+            if choice == QMessageBox.ButtonRole.YesRole:
                 duplicate_actions[index] = "overwrite"
-            elif choice == QMessageBox.StandardButton.No:
+            elif choice == QMessageBox.ButtonRole.NoRole:
                 duplicate_actions[index] = "rename"
-            elif choice == QMessageBox.StandardButton.Ignore:
+            elif choice == QMessageBox.ButtonRole.ActionRole:
                 duplicate_actions[index] = "skip"
             else:
                 self._finish_scan_batch()

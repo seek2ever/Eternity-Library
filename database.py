@@ -254,7 +254,7 @@ class DatabaseWorker(QObject):
     duplicates_ready = Signal(list)
     write_finished = Signal(int, int, int)  # 新增数、跳过数、覆盖数
     write_error = Signal(str)
-    mutation_finished = Signal(str, int)  # 操作类型（update/delete）、book_id
+    mutation_finished = Signal(str, object)  # 操作类型（update/delete）、book_id
     mutation_error = Signal(str)
 
     def __init__(self, db_name='books_information.db'):
@@ -700,4 +700,7 @@ class DatabaseWorker(QObject):
 
 
 if __name__ == '__main__':
-    pass
+    worker = DatabaseWorker()
+    worker.initialize()
+    result = worker._select_all("SELECT * FROM books_information")
+    print(len(result))
