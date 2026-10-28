@@ -13,6 +13,7 @@ from PySide6.QtCore import (
     Signal,
 )
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QFrame,
     QHBoxLayout,
@@ -52,11 +53,11 @@ class MainWindow(QMainWindow):
     request_by_type = Signal(str)
     request_by_status = Signal(str)
     request_by_author = Signal(str)
-    request_close_database = Signal()
-    request_find_duplicates = Signal(object)
-    request_insert_books = Signal(object, object)
-    request_update_book = Signal(object, str, object)
-    request_delete_book = Signal(int)
+    sig_close_database = Signal()
+    sig_find_duplicates = Signal(object)
+    sig_insert_books = Signal(object, object)
+    sig_update_book = Signal(object, str, object)
+    sig_delete_book = Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -138,19 +139,19 @@ class MainWindow(QMainWindow):
         self.request_by_author.connect(
             self._worker.fetch_books_by_author
         )
-        self.request_find_duplicates.connect(
+        self.sig_find_duplicates.connect(
             self._worker.find_batch_duplicates
         )
-        self.request_insert_books.connect(
+        self.sig_insert_books.connect(
             self._worker.insert_books
         )
-        self.request_update_book.connect(
+        self.sig_update_book.connect(
             self._worker.update_book_field
         )
-        self.request_delete_book.connect(
+        self.sig_delete_book.connect(
             self._worker.delete_book_by_id
         )
-        self.request_close_database.connect(
+        self.sig_close_database.connect(
             self._worker.close_database
         )
 
@@ -310,9 +311,8 @@ class MainWindow(QMainWindow):
         # TODO: 暂时使用使用默认的显示和编辑行为，后续再完善自定义delegate以便支持更复杂的显示和编辑行为
         # self.table_view.setItemDelegate(self.table_delegate)
         self.table_view.setShowGrid(True)
-        # TODO: 滚动时依然是按项滚动而不是像素滚动，后续需要优化
-        self.table_view.setHorizontalScrollMode(AbstractItemView.ScrollMode.ScrollPerPixel)
-        self.table_view.setVerticalScrollMode(AbstractItemView.ScrollMode.ScrollPerPixel)
+        self.table_view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.table_view.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         return self.table_view
 
     def _create_cover_view(self) -> QWidget:
@@ -346,7 +346,7 @@ class MainWindow(QMainWindow):
         self.cover_card_view.setFrameShape(QFrame.Shape.NoFrame)
         self.cover_card_view.setBackgroundRole(QtGui.QPalette.ColorRole.Base)
         self.cover_card_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.cover_card_view.setVerticalScrollMode(AbstractItemView.ScrollMode.ScrollPerPixel)
+        self.cover_card_view.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
 
         self.cover_card_view.clicked.connect(self._on_cover_card_clicked)
 
@@ -376,7 +376,7 @@ class MainWindow(QMainWindow):
 
                 field_name = BOOK_COLUMNS[column]
                 new_value = self.table_model.data(index, role=Qt.ItemDataRole.EditRole)
-                self.request_update_book.emit(book_id, field_name, new_value)
+                self.sig_update_book.emit(book_id, field_name, new_value)
 
         if self.statusbar is not None:
             self.statusbar.showMessage("正在保存修改……")
@@ -404,14 +404,14 @@ class MainWindow(QMainWindow):
         answer = QMessageBox.question(
             self,
             "确认删除",
-            f"确定从书库中删除《{book_name}》吗？\n此操作不会删除本地电子书文件。",
+            f"确定从书库中删除 {book_name} 吗？\n此操作不会删除本地电子书文件。",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
 
         self.delete_button.setEnabled(False)
-        self.request_delete_book.emit(book_id)
+        self.sig_delete_book.emit(book_id)
         if self.statusbar is not None:
             self.statusbar.showMessage("正在删除书籍……")
 
@@ -546,7 +546,7 @@ class MainWindow(QMainWindow):
             self.statusbar.showMessage(
                 f"正在检查 {len(books)} 本扫描书籍……"
             )
-        self.request_find_duplicates.emit(books)
+        self.sig_find_duplicates.emit(books)
 
     def _on_duplicates_ready(self, duplicates: list) -> None:
         """由主线程逐本询问重复书籍的处理方式。"""
@@ -560,36 +560,41 @@ class MainWindow(QMainWindow):
             message.setIcon(QMessageBox.Icon.Question)
             message.setText(f"检测到重复书籍：{book_name}")
             message.setInformativeText("应当如何处理？")
-            message.setStandardButtons(
-                QMessageBox.StandardButton.Yes
-                | QMessageBox.StandardButton.No
-                | QMessageBox.StandardButton.Ignore
-                | QMessageBox.StandardButton.Cancel
-            )
+            # message.setStandardButtons(
+            #     QMessageBox.StandardButton.Yes
+            #     | QMessageBox.StandardButton.No
+            #     | QMessageBox.StandardButton.Ignore
+            #     | QMessageBox.StandardButton.Cancel
+            # )
             # 添加自定义中文按钮
             message.addButton("覆盖", QMessageBox.ButtonRole.YesRole)
             message.addButton("重命名", QMessageBox.ButtonRole.NoRole)
             message.addButton("跳过", QMessageBox.ButtonRole.ActionRole)
             message.addButton("全部取消", QMessageBox.ButtonRole.RejectRole)
-
+            message.exec()
+            message.accepted.connect(self.duplicate_check)
+            message.rejected.connect(self.duplicate_check)
             choice = message.clickedButton()
-            if choice == QMessageBox.ButtonRole.YesRole:
+            if choice == yes:
                 duplicate_actions[index] = "overwrite"
-            elif choice == QMessageBox.ButtonRole.NoRole:
+            elif choice == no:
                 duplicate_actions[index] = "rename"
             elif choice == QMessageBox.ButtonRole.ActionRole:
                 duplicate_actions[index] = "skip"
             else:
                 self._finish_scan_batch()
                 if self.statusbar is not None:
+                    # TODO：扫描时即使书籍未入库也会自动触发提示消息，待修复
                     self.statusbar.showMessage("已取消本次批量入库")
                 if self._scan_dialog is not None:
                     self._scan_dialog.close()
                 return
 
-        self.request_insert_books.emit(self._pending_scan_books, duplicate_actions)
+        self.sig_insert_books.emit(self._pending_scan_books, duplicate_actions)
         if self.statusbar is not None:
             self.statusbar.showMessage("正在批量写入数据库……")
+
+    def duplicate_check(self):
 
     def _on_write_finished(
             self,
@@ -614,8 +619,7 @@ class MainWindow(QMainWindow):
                 self,
                 "扫描完成",
                 "本批书籍已入库，是否继续扫描其他文件夹？",
-                QMessageBox.StandardButton.Yes
-                | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if reply == QMessageBox.StandardButton.Yes:
                 self._scan_dialog.show()
@@ -645,7 +649,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         """窗口关闭时先关闭 Worker 连接，再退出线程。"""
-        self.request_close_database.emit()
+        self.sig_close_database.emit()
         if not self._database_thread.wait(3000):
             Tips.information_msg("数据库线程未能在3秒内正常退出。")
             event.ignore()

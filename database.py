@@ -702,5 +702,5 @@ class DatabaseWorker(QObject):
 if __name__ == '__main__':
     worker = DatabaseWorker()
     worker.initialize()
-    result = worker._select_all("SELECT * FROM books_information")
-    print(len(result))
+    result = worker._select_one("SELECT * FROM books_information WHERE book_name=?", ("test",))
+    print(result.book_id)

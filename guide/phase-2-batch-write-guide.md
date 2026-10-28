@@ -355,13 +355,13 @@ self.request_by_status.connect(
 self.request_by_author.connect(
     self._worker.fetch_books_by_author
 )
-self.request_find_duplicates.connect(
+self.sig_find_duplicates.connect(
     self._worker.find_batch_duplicates
 )
-self.request_insert_books.connect(
+self.sig_insert_books.connect(
     self._worker.insert_books
 )
-self.request_close_database.connect(
+self.sig_close_database.connect(
     self._worker.close_database
 )
 
@@ -378,16 +378,18 @@ self.request_initialize.emit()
 
 ```python
     def scan_books(self) -> None:
-    """打开扫描窗口；每次只允许提交一个扫描批次。"""
-    if self._scan_in_progress:
-        return
 
-    self._scan_dialog = ScanBookFiles(self)
-    self._scan_dialog.books_scanned.connect(
-        self._on_scan_books_found
-    )
-    self._scan_dialog.show()
-    self._scan_dialog.select_directory()
+
+"""打开扫描窗口；每次只允许提交一个扫描批次。"""
+if self._scan_in_progress:
+    return
+
+self._scan_dialog = ScanBookFiles(self)
+self._scan_dialog.books_scanned.connect(
+    self._on_scan_books_found
+)
+self._scan_dialog.show()
+self._scan_dialog.select_directory()
 
 
 def _on_scan_books_found(self, books: object) -> None:
@@ -411,7 +413,7 @@ def _on_scan_books_found(self, books: object) -> None:
         self.statusbar.showMessage(
             f"正在检查 {len(books)} 本扫描书籍……"
         )
-    self.request_find_duplicates.emit(books)
+    self.sig_find_duplicates.emit(books)
 
 
 def _on_duplicates_ready(self, duplicates: list) -> None:
@@ -454,7 +456,7 @@ def _on_duplicates_ready(self, duplicates: list) -> None:
                 self._scan_dialog.close()
             return
 
-    self.request_insert_books.emit(
+    self.sig_insert_books.emit(
         self._pending_scan_books,
         duplicate_actions,
     )
@@ -783,7 +785,7 @@ python verify_phase2.py
 | 现象 | 检查点 |
 |---|---|
 | `ScanBookFiles` 没有 `books_scanned` | 确认信号定义在类体中，并已替换 `books.py` 的两个旧方法。 |
-| 扫描后没有重复检查 | 确认 `scan_books` 创建的对话框连接了 `books_scanned`，且 `request_find_duplicates` 已连接 Worker 槽。 |
+| 扫描后没有重复检查 | 确认 `scan_books` 创建的对话框连接了 `books_scanned`，且 `sig_find_duplicates` 已连接 Worker 槽。 |
 | `QObject::connect` 或信号参数错误 | 请求信号为 `Signal(object)` 与 `Signal(object, object)`；不要传递 SQLite 对象。 |
 | 写入后视图未刷新 | 确认 `write_finished` 连接 `_on_write_finished`，此槽清空缓存后调用 `request_fetch_all.emit()`。 |
 | 一批书只写入部分记录 | 检查 Worker 使用 `with self.connection:`，且 SQL 错误通过 `write_error` 返回；整批应回滚。 |

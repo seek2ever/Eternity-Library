@@ -279,15 +279,15 @@ from book_record import (
 在主线程请求信号连接区域添加：
 
 ```python
-        self.request_update_book.connect(
-            self._worker.update_book_field
-        )
-        self.request_delete_book.connect(
-            self._worker.delete_book_by_id
-        )
+        self.sig_update_book.connect(
+    self._worker.update_book_field
+)
+self.sig_delete_book.connect(
+    self._worker.delete_book_by_id
+)
 ```
 
-这些连接应放在现有 `request_insert_books`、`request_close_database` 连接附近。Worker 结果槽函数仍由 Qt 在主线程执行，数据库操作则由 Worker 所在线程执行。
+这些连接应放在现有 `sig_insert_books`、`sig_close_database` 连接附近。Worker 结果槽函数仍由 Qt 在主线程执行，数据库操作则由 Worker 所在线程执行。
 
 ## 6. 修改表格编辑处理：把修改请求发给 Worker
 
@@ -295,39 +295,39 @@ from book_record import (
 
 ```python
     def on_table_data_changed(self, top_left, bottom_right, roles) -> None:
-        """把表格编辑转换成 Worker 更新请求。"""
-        if roles and Qt.ItemDataRole.EditRole not in roles:
-            return
+    """把表格编辑转换成 Worker 更新请求。"""
+    if roles and Qt.ItemDataRole.EditRole not in roles:
+        return
 
-        for row in range(top_left.row(), bottom_right.row() + 1):
-            for column in range(top_left.column(), bottom_right.column() + 1):
-                if column == 0:
-                    continue
+    for row in range(top_left.row(), bottom_right.row() + 1):
+        for column in range(top_left.column(), bottom_right.column() + 1):
+            if column == 0:
+                continue
 
-                index = self.table_model.index(row, column)
-                book_id = self.table_model.data(
-                    index,
-                    role=BookTableModel.BookIdRole,
+            index = self.table_model.index(row, column)
+            book_id = self.table_model.data(
+                index,
+                role=BookTableModel.BookIdRole,
+            )
+            if not isinstance(book_id, int) or isinstance(book_id, bool):
+                self._on_mutation_error(
+                    "当前书籍没有有效 ID，无法保存表格修改。"
                 )
-                if not isinstance(book_id, int) or isinstance(book_id, bool):
-                    self._on_mutation_error(
-                        "当前书籍没有有效 ID，无法保存表格修改。"
-                    )
-                    return
+                return
 
-                field_name = BOOK_COLUMNS[column]
-                new_value = self.table_model.data(
-                    index,
-                    role=Qt.ItemDataRole.EditRole,
-                )
-                self.request_update_book.emit(
-                    book_id,
-                    field_name,
-                    new_value,
-                )
+            field_name = BOOK_COLUMNS[column]
+            new_value = self.table_model.data(
+                index,
+                role=Qt.ItemDataRole.EditRole,
+            )
+            self.sig_update_book.emit(
+                book_id,
+                field_name,
+                new_value,
+            )
 
-        if self.statusbar is not None:
-            self.statusbar.showMessage("正在保存表格修改……")
+    if self.statusbar is not None:
+        self.statusbar.showMessage("正在保存表格修改……")
 ```
 
 `dataChanged` 发出时 Model 的内存值已经改变，所以 Worker 失败后必须重新查询数据库，把 Model 恢复成实际保存的数据。第 8 节会加入统一的成功、失败处理。
@@ -371,45 +371,45 @@ from book_record import (
 
 ```python
     def _delete_selected_book(self) -> None:
-        """确认后按书籍 ID 请求 Worker 删除选中记录。"""
-        selected_rows = self.table_view.selectionModel().selectedRows()
-        if not selected_rows:
-            QMessageBox.information(
-                self,
-                "删除书籍",
-                "请先切换到表格视图并选择一本书。",
-            )
-            return
-
-        row = selected_rows[0].row()
-        index = self.table_model.index(row, 0)
-        book_id = self.table_model.data(
-            index,
-            role=BookTableModel.BookIdRole,
-        )
-        book_name = self.table_model.data(
-            self.table_model.index(row, 1),
-            role=Qt.ItemDataRole.DisplayRole,
-        )
-        if not isinstance(book_id, int) or isinstance(book_id, bool):
-            Tips.information_msg("选中书籍没有有效 ID，无法删除。")
-            return
-
-        answer = QMessageBox.question(
+    """确认后按书籍 ID 请求 Worker 删除选中记录。"""
+    selected_rows = self.table_view.selectionModel().selectedRows()
+    if not selected_rows:
+        QMessageBox.information(
             self,
-            "确认删除",
-            f"确定从书库中删除《{book_name}》吗？\n"
-            "此操作不会删除本地电子书文件。",
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.No,
+            "删除书籍",
+            "请先切换到表格视图并选择一本书。",
         )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
+        return
 
-        self.delete_button.setEnabled(False)
-        self.request_delete_book.emit(book_id)
-        if self.statusbar is not None:
-            self.statusbar.showMessage("正在删除书籍……")
+    row = selected_rows[0].row()
+    index = self.table_model.index(row, 0)
+    book_id = self.table_model.data(
+        index,
+        role=BookTableModel.BookIdRole,
+    )
+    book_name = self.table_model.data(
+        self.table_model.index(row, 1),
+        role=Qt.ItemDataRole.DisplayRole,
+    )
+    if not isinstance(book_id, int) or isinstance(book_id, bool):
+        Tips.information_msg("选中书籍没有有效 ID，无法删除。")
+        return
+
+    answer = QMessageBox.question(
+        self,
+        "确认删除",
+        f"确定从书库中删除《{book_name}》吗？\n"
+        "此操作不会删除本地电子书文件。",
+        QMessageBox.StandardButton.Yes
+        | QMessageBox.StandardButton.No,
+    )
+    if answer != QMessageBox.StandardButton.Yes:
+        return
+
+    self.delete_button.setEnabled(False)
+    self.sig_delete_book.emit(book_id)
+    if self.statusbar is not None:
+        self.statusbar.showMessage("正在删除书籍……")
 ```
 
 这里仅删除数据库记录，不触碰本地文件；这与本项目目前“管理本地图书信息”的定位一致。
