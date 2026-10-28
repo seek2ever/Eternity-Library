@@ -155,9 +155,7 @@ class MainWindow(QMainWindow):
         )
 
         # 工作线程结束时安全清理__worker对象
-        self._database_thread.finished.connect(
-            self._worker.deleteLater
-        )
+        self._database_thread.finished.connect(self._worker.deleteLater)
 
         self._database_thread.start()
         self.request_initialize.emit()
@@ -307,18 +305,14 @@ class MainWindow(QMainWindow):
     def _create_table_view(self) -> QTableView:
         self.table_view = QTableView()
         self.table_view.setModel(self.table_model)
-        self.table_view.setSelectionBehavior(
-            QTableView.SelectionBehavior.SelectItems
-        )
-        self.table_view.setSelectionMode(
-            QTableView.SelectionMode.SingleSelection
-        )
+        self.table_view.setSelectionBehavior(QTableView.SelectionBehavior.SelectItems)
+        self.table_view.setSelectionMode(QTableView.SelectionMode.SingleSelection)
         # TODO: 暂时使用使用默认的显示和编辑行为，后续再完善自定义delegate以便支持更复杂的显示和编辑行为
         # self.table_view.setItemDelegate(self.table_delegate)
         self.table_view.setShowGrid(True)
         # TODO: 滚动时依然是按项滚动而不是像素滚动，后续需要优化
-        self.cover_card_view.setHorizontalScrollMode(QListView.ScrollMode.ScrollPerPixel)
-        self.cover_card_view.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
+        self.table_view.setHorizontalScrollMode(AbstractItemView.ScrollMode.ScrollPerPixel)
+        self.table_view.setVerticalScrollMode(AbstractItemView.ScrollMode.ScrollPerPixel)
         return self.table_view
 
     def _create_cover_view(self) -> QWidget:
@@ -352,7 +346,7 @@ class MainWindow(QMainWindow):
         self.cover_card_view.setFrameShape(QFrame.Shape.NoFrame)
         self.cover_card_view.setBackgroundRole(QtGui.QPalette.ColorRole.Base)
         self.cover_card_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.cover_card_view.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
+        self.cover_card_view.setVerticalScrollMode(AbstractItemView.ScrollMode.ScrollPerPixel)
 
         self.cover_card_view.clicked.connect(self._on_cover_card_clicked)
 
@@ -375,26 +369,14 @@ class MainWindow(QMainWindow):
                     continue
 
                 index = self.table_model.index(row, column)
-                book_id = self.table_model.data(
-                    index,
-                    role=BookTableModel.BookIdRole,
-                )
+                book_id = self.table_model.data(index, role=BookTableModel.BookIdRole)
                 if not isinstance(book_id, int) or isinstance(book_id, bool):
-                    self._on_mutation_error(
-                        "当前书籍没有有效 ID，无法保存表格修改。"
-                    )
+                    self._on_mutation_error("未获取到有效ID，无法保存表格修改。")
                     return
 
                 field_name = BOOK_COLUMNS[column]
-                new_value = self.table_model.data(
-                    index,
-                    role=Qt.ItemDataRole.EditRole,
-                )
-                self.request_update_book.emit(
-                    book_id,
-                    field_name,
-                    new_value,
-                )
+                new_value = self.table_model.data(index, role=Qt.ItemDataRole.EditRole)
+                self.request_update_book.emit(book_id, field_name, new_value)
 
         if self.statusbar is not None:
             self.statusbar.showMessage("正在保存修改……")
@@ -485,7 +467,7 @@ class MainWindow(QMainWindow):
         """刷新当前数据；缓存有效时不重复查询全部书籍。"""
         if (
                 self._books_cache is not None
-                and (time.time() - self._cache_timestamp) < 30
+                and (time.time() - self._cache_timestamp) < 15
         ):
             self._on_books_loaded(self._books_cache)
             return
@@ -605,10 +587,7 @@ class MainWindow(QMainWindow):
                     self._scan_dialog.close()
                 return
 
-        self.request_insert_books.emit(
-            self._pending_scan_books,
-            duplicate_actions,
-        )
+        self.request_insert_books.emit(self._pending_scan_books, duplicate_actions)
         if self.statusbar is not None:
             self.statusbar.showMessage("正在批量写入数据库……")
 
