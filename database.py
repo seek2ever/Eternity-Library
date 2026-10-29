@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import random
 import sqlite3
-from typing import Union, Any
+from typing import Union
 from PySide6.QtCore import (
     QObject,
     QThread,
@@ -254,7 +254,7 @@ class DatabaseWorker(QObject):
     duplicates_ready = Signal(list)
     write_finished = Signal(int, int, int)  # 新增数、跳过数、覆盖数
     write_error = Signal(str)
-    mutation_finished = Signal(str, int)  # 操作类型（update/delete）、book_id
+    mutation_finished = Signal(str, object)  # 操作类型（update/delete）、book_id
     mutation_error = Signal(str)
 
     def __init__(self, db_name='books_information.db'):
@@ -350,7 +350,7 @@ class DatabaseWorker(QObject):
             self.books_ready.emit(books)
 
     @Slot(str)
-    def fetch_books_by_type(self, book_type: str) -> None:
+    def fetch_by_type(self, book_type: str) -> None:
         """按书籍类型精确筛选。"""
         books = self._select_all(
             """
@@ -363,7 +363,7 @@ class DatabaseWorker(QObject):
             self.books_ready.emit(books)
 
     @Slot(str)
-    def fetch_books_by_status(self, read_status: str) -> None:
+    def fetch_by_status(self, read_status: str) -> None:
         """按阅读状态精确筛选。"""
         books = self._select_all(
             """
@@ -377,7 +377,7 @@ class DatabaseWorker(QObject):
             self.books_ready.emit(books)
 
     @Slot(str)
-    def fetch_books_by_author(self, author: str) -> None:
+    def fetch_by_author(self, author: str) -> None:
         """按作者精确筛选。"""
         books = self._select_all(
             """
@@ -448,7 +448,7 @@ class DatabaseWorker(QObject):
 
     @Slot(object, object)
     def insert_books(self, books: object, duplicate_actions: object) -> None:
-        """在单个 SQLite 事务中处理整批书籍。"""
+        """在单个SQLite事务中处理整批书籍。"""
         if self.connection is None:
             self.write_error.emit("数据库连接未初始化，无法写入书籍。")
             return
@@ -477,8 +477,8 @@ class DatabaseWorker(QObject):
             skipped_count = 0
             overwritten_count = 0
 
-            # 先取得 SQLite 写锁，再检查重复项，避免其他进程在检查与插入之间
-            # 写入同名记录。connection 上下文负责成功提交或异常回滚。
+            # 先取得SQLite写锁，再检查重复项，避免其他进程在检查与插入之间
+            # 写入同名记录，connection上下文负责成功提交或异常回滚。
             with self.connection:
                 self.connection.execute("BEGIN IMMEDIATE")
                 occupied_names = {
@@ -556,7 +556,12 @@ class DatabaseWorker(QObject):
         )
 
     @Slot(int, str, object)
-    def update_book_field(self, book_id: int, field_name: str, value: object) -> None:
+    def update_book_field(
+        self,
+        book_id: int,
+        field_name: str,
+        value: int | float | str | None,
+    ) -> None:
         """按稳定ID更新一个字段；禁止更改 book_id。"""
         if self.connection is None:
             self.mutation_error.emit("数据库连接未初始化，无法更新书籍。")
@@ -695,4 +700,7 @@ class DatabaseWorker(QObject):
 
 
 if __name__ == '__main__':
-    pass
+    worker = DatabaseWorker()
+    worker.initialize()
+    result = worker._select_one("SELECT * FROM books_information WHERE book_name=?", ("test(1)",))
+    print(result.book_id)
