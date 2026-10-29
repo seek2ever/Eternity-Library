@@ -53,11 +53,11 @@ class MainWindow(QMainWindow):
     request_by_type = Signal(str)
     request_by_status = Signal(str)
     request_by_author = Signal(str)
-    sig_close_database = Signal()
-    sig_find_duplicates = Signal(object)
-    sig_insert_books = Signal(object, object)
-    sig_update_book = Signal(object, str, object)
-    sig_delete_book = Signal(object)
+    request_close_database = Signal()
+    request_find_duplicates = Signal(object)
+    request_insert_books = Signal(object, object)
+    request_update_book = Signal(object, str, object)
+    request_delete_book = Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -104,56 +104,26 @@ class MainWindow(QMainWindow):
         self._worker.moveToThread(self._database_thread)
 
         # 工作线程信号 -> 主线程槽函数
-        self._worker.initialized.connect(
-            self._on_database_initialized
-        )
+        self._worker.initialized.connect(self._on_database_initialized)
         self._worker.books_ready.connect(self._on_books_loaded)
         self._worker.query_error.connect(self._on_query_error)
-        self._worker.duplicates_ready.connect(
-            self._on_duplicates_ready
-        )
-        self._worker.write_finished.connect(
-            self._on_write_finished
-        )
+        self._worker.duplicates_ready.connect(self._on_duplicates_ready)
+        self._worker.write_finished.connect(self._on_write_finished)
         self._worker.write_error.connect(self._on_write_error)
-        self._worker.mutation_finished.connect(
-            self._on_mutation_finished
-        )
-        self._worker.mutation_error.connect(
-            self._on_mutation_error
-        )
+        self._worker.mutation_finished.connect(self._on_mutation_finished)
+        self._worker.mutation_error.connect(self._on_mutation_error)
 
         # 主线程信号 -> 工作线程槽函数
-        self.request_initialize.connect(
-            self._worker.initialize
-        )
-        self.request_all.connect(
-            self._worker.fetch_all_books
-        )
-        self.request_by_type.connect(
-            self._worker.fetch_books_by_type
-        )
-        self.request_by_status.connect(
-            self._worker.fetch_books_by_status
-        )
-        self.request_by_author.connect(
-            self._worker.fetch_books_by_author
-        )
-        self.sig_find_duplicates.connect(
-            self._worker.find_batch_duplicates
-        )
-        self.sig_insert_books.connect(
-            self._worker.insert_books
-        )
-        self.sig_update_book.connect(
-            self._worker.update_book_field
-        )
-        self.sig_delete_book.connect(
-            self._worker.delete_book_by_id
-        )
-        self.sig_close_database.connect(
-            self._worker.close_database
-        )
+        self.request_initialize.connect(self._worker.initialize)
+        self.request_all.connect(self._worker.fetch_all_books)
+        self.request_by_type.connect(self._worker.fetch_by_type)
+        self.request_by_status.connect(self._worker.fetch_by_status)
+        self.request_by_author.connect(self._worker.fetch_by_author)
+        self.request_find_duplicates.connect(self._worker.find_batch_duplicates)
+        self.request_insert_books.connect(self._worker.insert_books)
+        self.request_update_book.connect(self._worker.update_book_field)
+        self.request_delete_book.connect(self._worker.delete_book_by_id)
+        self.request_close_database.connect(self._worker.close_database)
 
         # 工作线程结束时安全清理__worker对象
         self._database_thread.finished.connect(self._worker.deleteLater)
@@ -376,7 +346,7 @@ class MainWindow(QMainWindow):
 
                 field_name = BOOK_COLUMNS[column]
                 new_value = self.table_model.data(index, role=Qt.ItemDataRole.EditRole)
-                self.sig_update_book.emit(book_id, field_name, new_value)
+                self.request_update_book.emit(book_id, field_name, new_value)
 
         if self.statusbar is not None:
             self.statusbar.showMessage("正在保存修改……")
@@ -411,7 +381,7 @@ class MainWindow(QMainWindow):
             return
 
         self.delete_button.setEnabled(False)
-        self.sig_delete_book.emit(book_id)
+        self.request_delete_book.emit(book_id)
         if self.statusbar is not None:
             self.statusbar.showMessage("正在删除书籍……")
 
@@ -546,7 +516,7 @@ class MainWindow(QMainWindow):
             self.statusbar.showMessage(
                 f"正在检查 {len(books)} 本扫描书籍……"
             )
-        self.sig_find_duplicates.emit(books)
+        self.request_find_duplicates.emit(books)
 
     def _on_duplicates_ready(self, duplicates: list) -> None:
         """由主线程逐本询问重复书籍的处理方式。"""
@@ -560,41 +530,31 @@ class MainWindow(QMainWindow):
             message.setIcon(QMessageBox.Icon.Question)
             message.setText(f"检测到重复书籍：{book_name}")
             message.setInformativeText("应当如何处理？")
-            # message.setStandardButtons(
-            #     QMessageBox.StandardButton.Yes
-            #     | QMessageBox.StandardButton.No
-            #     | QMessageBox.StandardButton.Ignore
-            #     | QMessageBox.StandardButton.Cancel
-            # )
-            # 添加自定义中文按钮
-            message.addButton("覆盖", QMessageBox.ButtonRole.YesRole)
-            message.addButton("重命名", QMessageBox.ButtonRole.NoRole)
-            message.addButton("跳过", QMessageBox.ButtonRole.ActionRole)
-            message.addButton("全部取消", QMessageBox.ButtonRole.RejectRole)
+
+            # 添加自定义中文按钮 TODO: 目前UI文本为硬编码，后续可改为国际化
+            overwrite = message.addButton("覆盖", QMessageBox.ButtonRole.YesRole)
+            rename    = message.addButton("重命名", QMessageBox.ButtonRole.NoRole)
+            skip      = message.addButton("跳过", QMessageBox.ButtonRole.ActionRole)
+            cancel    = message.addButton("全部取消", QMessageBox.ButtonRole.RejectRole)
             message.exec()
-            message.accepted.connect(self.duplicate_check)
-            message.rejected.connect(self.duplicate_check)
-            choice = message.clickedButton()
-            if choice == yes:
+            clicked = message.clickedButton()
+            if clicked == overwrite:
                 duplicate_actions[index] = "overwrite"
-            elif choice == no:
+            elif clicked == rename:
                 duplicate_actions[index] = "rename"
-            elif choice == QMessageBox.ButtonRole.ActionRole:
+            elif clicked == skip:
                 duplicate_actions[index] = "skip"
-            else:
+            elif clicked == cancel:
                 self._finish_scan_batch()
                 if self.statusbar is not None:
-                    # TODO：扫描时即使书籍未入库也会自动触发提示消息，待修复
                     self.statusbar.showMessage("已取消本次批量入库")
                 if self._scan_dialog is not None:
                     self._scan_dialog.close()
                 return
 
-        self.sig_insert_books.emit(self._pending_scan_books, duplicate_actions)
+        self.request_insert_books.emit(self._pending_scan_books, duplicate_actions)
         if self.statusbar is not None:
             self.statusbar.showMessage("正在批量写入数据库……")
-
-    def duplicate_check(self):
 
     def _on_write_finished(
             self,
@@ -602,7 +562,7 @@ class MainWindow(QMainWindow):
             skipped_count: int,
             overwritten_count: int,
     ) -> None:
-        """写入成功后清除缓存，并让两个 Model 从数据库刷新。"""
+        """写入成功后清除缓存，并让两个Model从数据库刷新。"""
         self._finish_scan_batch()
         self._books_cache = None
         self._cache_timestamp = 0.0
@@ -649,7 +609,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         """窗口关闭时先关闭 Worker 连接，再退出线程。"""
-        self.sig_close_database.emit()
+        self.request_close_database.emit()
         if not self._database_thread.wait(3000):
             Tips.information_msg("数据库线程未能在3秒内正常退出。")
             event.ignore()

@@ -347,13 +347,13 @@ self.request_all.connect(
     self._worker.fetch_all_books
 )
 self.request_by_type.connect(
-    self._worker.fetch_books_by_type
+    self._worker.fetch_by_type
 )
 self.request_by_status.connect(
-    self._worker.fetch_books_by_status
+    self._worker.fetch_by_status
 )
 self.request_by_author.connect(
-    self._worker.fetch_books_by_author
+    self._worker.fetch_by_author
 )
 self.sig_find_duplicates.connect(
     self._worker.find_batch_duplicates
