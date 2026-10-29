@@ -309,9 +309,9 @@ from book_record import BookRecord
 在调用 `_setup_book_worker()` 之前加入：
 
 ```python
-        self._pending_scan_books: list[BookRecord] | None = None
-        self._scan_in_progress = False
-        self._scan_dialog: ScanBookFiles | None = None
+        self._pending_books: list[BookRecord] | None = None
+self._scan_in_progress = False
+self._scan_dialog: ScanBookFiles | None = None
 ```
 
 ### 4.3 替换 `_setup_book_worker`
@@ -405,7 +405,7 @@ def _on_scan_books_found(self, books: object) -> None:
         self._on_write_error("扫描器返回的数据中包含无效书籍记录。")
         return
 
-    self._pending_scan_books = books
+    self._pending_books = books
     self._scan_in_progress = True
     if self.scan_button is not None:
         self.scan_button.setEnabled(False)
@@ -418,7 +418,7 @@ def _on_scan_books_found(self, books: object) -> None:
 
 def _on_duplicates_ready(self, duplicates: list) -> None:
     """由主线程逐本询问重复书籍的处理方式。"""
-    if self._pending_scan_books is None:
+    if self._pending_books is None:
         self._on_write_error("收到重复检查结果时，没有待处理的扫描批次。")
         return
 
@@ -457,7 +457,7 @@ def _on_duplicates_ready(self, duplicates: list) -> None:
             return
 
     self.sig_insert_books.emit(
-        self._pending_scan_books,
+        self._pending_books,
         duplicate_actions,
     )
     if self.statusbar is not None:
@@ -509,7 +509,7 @@ def _on_write_error(self, error_msg: str) -> None:
 
 def _finish_scan_batch(self) -> None:
     """释放当前扫描批次并恢复扫描按钮。"""
-    self._pending_scan_books = None
+    self._pending_books = None
     self._scan_in_progress = False
     if self.scan_button is not None:
         self.scan_button.setEnabled(True)

@@ -65,7 +65,9 @@ class MainWindow(QMainWindow):
         self._books_cache: list[BookRecord] | None
         self._cache_timestamp = 0.0
 
-        self._pending_scan_books: list[BookRecord] | None
+        self._pending_books: list[BookRecord] | None
+        # TODO: 在扫描结果到达后才设为 True。
+        #  因此它能阻止正在处理中的批次再次启动，但不一定能阻止用户在目录选择或扫描结果返回前再次点击
         self._scan_in_progress = False
         self._scan_dialog: ScanBookFiles
         self._setup_book_worker()
@@ -508,7 +510,7 @@ class MainWindow(QMainWindow):
             self._on_write_error("扫描器返回的数据中包含无效书籍记录。")
             return
 
-        self._pending_scan_books = books
+        self._pending_books = books
         self._scan_in_progress = True
         if self.scan_button is not None:
             self.scan_button.setEnabled(False)
@@ -520,7 +522,7 @@ class MainWindow(QMainWindow):
 
     def _on_duplicates_ready(self, duplicates: list) -> None:
         """由主线程逐本询问重复书籍的处理方式。"""
-        if self._pending_scan_books is None:
+        if self._pending_books is None:
             self._on_write_error("没有待处理的重复文件。")
             return
 
@@ -552,7 +554,7 @@ class MainWindow(QMainWindow):
                     self._scan_dialog.close()
                 return
 
-        self.request_insert_books.emit(self._pending_scan_books, duplicate_actions)
+        self.request_insert_books.emit(self._pending_books, duplicate_actions)
         if self.statusbar is not None:
             self.statusbar.showMessage("正在批量写入数据库……")
 
@@ -598,7 +600,7 @@ class MainWindow(QMainWindow):
 
     def _finish_scan_batch(self) -> None:
         """释放当前扫描批次并恢复扫描按钮。"""
-        self._pending_scan_books = None
+        self._pending_books = None
         self._scan_in_progress = False
         if self.scan_button is not None:
             self.scan_button.setEnabled(True)
