@@ -65,10 +65,10 @@ class MainWindow(QMainWindow):
         self._books_cache: list[BookRecord] | None
         self._cache_timestamp = 0.0
 
+        # 待处理书籍与扫描状态标记
         self._pending_books: list[BookRecord] | None
-        # TODO: 在扫描结果到达后才设为 True。
-        #  因此它能阻止正在处理中的批次再次启动，但不一定能阻止用户在目录选择或扫描结果返回前再次点击
-        self._scan_in_progress = False
+        self._scanning = False
+
         self._scan_dialog: ScanBookFiles
         self._setup_book_worker()
 
@@ -112,8 +112,8 @@ class MainWindow(QMainWindow):
         self._worker.duplicates_ready.connect(self._on_duplicates_ready)
         self._worker.write_finished.connect(self._on_write_finished)
         self._worker.write_error.connect(self._on_write_error)
-        self._worker.mutation_finished.connect(self._on_mutation_finished)
-        self._worker.mutation_error.connect(self._on_mutation_error)
+        self._worker.change_finished.connect(self._on_change_finished)
+        self._worker.change_error.connect(self._on_change_error)
 
         # 主线程信号 -> 工作线程槽函数
         self.request_initialize.connect(self._worker.initialize)
@@ -255,7 +255,7 @@ class MainWindow(QMainWindow):
 
         self.delete_button = QPushButton("删除选中书籍")
         self.delete_button.setFixedHeight(36)
-        self.delete_button.clicked.connect(self._delete_selected_book)
+        self.delete_button.clicked.connect(self._delete_book)
 
         self.clear_button = QPushButton(self._translate("Not show", "取消显示"))
         self.clear_button.setFixedHeight(36)
@@ -320,7 +320,7 @@ class MainWindow(QMainWindow):
         self.cover_card_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.cover_card_view.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
 
-        self.cover_card_view.clicked.connect(self._on_cover_card_clicked)
+        self.cover_card_view.clicked.connect(self._on_cover_clicked)
 
         layout.addWidget(self.cover_card_view)
         return container
@@ -343,7 +343,7 @@ class MainWindow(QMainWindow):
                 index = self.table_model.index(row, column)
                 book_id = self.table_model.data(index, role=BookTableModel.BookIdRole)
                 if not isinstance(book_id, int) or isinstance(book_id, bool):
-                    self._on_mutation_error("未获取到有效ID，无法保存表格修改。")
+                    self._on_change_error("未获取到有效ID，无法保存表格修改。")
                     return
 
                 field_name = BOOK_COLUMNS[column]
@@ -353,7 +353,7 @@ class MainWindow(QMainWindow):
         if self.statusbar is not None:
             self.statusbar.showMessage("正在保存修改……")
 
-    def _delete_selected_book(self) -> None:
+    def _delete_book(self) -> None:
         """确认后按书籍ID请求Worker删除选中记录。"""
         selected_rows = self.table_view.selectionModel().selectedIndexes()
         if not selected_rows:
@@ -387,14 +387,14 @@ class MainWindow(QMainWindow):
         if self.statusbar is not None:
             self.statusbar.showMessage("正在删除书籍……")
 
-    def _invalidate_books_cache(self) -> None:
+    def _invalidate_cache(self) -> None:
         """写操作完成后清除旧缓存，确保视图重新读取数据库。"""
         self._books_cache = None
         self._cache_timestamp = 0.0
 
-    def _on_mutation_finished(self, operation: str, book_id: int) -> None:
+    def _on_change_finished(self, operation: str, book_id: int) -> None:
         """修改成功后刷新封面和表格 Model。"""
-        self._invalidate_books_cache()
+        self._invalidate_cache()
         self.delete_button.setEnabled(True)
 
         if self.statusbar is not None:
@@ -402,9 +402,9 @@ class MainWindow(QMainWindow):
             self.statusbar.showMessage(f"书籍{book_id}已{action}，正在刷新视图……")
         self.request_all.emit()
 
-    def _on_mutation_error(self, error_msg: str) -> None:
+    def _on_change_error(self, error_msg: str) -> None:
         """修改失败时提示用户，并从数据库恢复 Model 的真实内容。"""
-        self._invalidate_books_cache()
+        self._invalidate_cache()
         self.delete_button.setEnabled(True)
 
         Tips.information_msg(error_msg)
@@ -412,7 +412,7 @@ class MainWindow(QMainWindow):
             self.statusbar.showMessage("书籍修改失败，正在恢复数据……")
         self.request_all.emit()
 
-    def _on_cover_card_clicked(self, index) -> None:
+    def _on_cover_clicked(self, index) -> None:
         """点击封面卡片"""
         book = self.cover_model.get_book(index.row())
         if book:
@@ -472,24 +472,24 @@ class MainWindow(QMainWindow):
         if self.statusbar is not None:
             self.statusbar.showMessage(message)
 
-    def load_books_by_type(self, book_type: str) -> None:
+    def load_by_type(self, book_type: str) -> None:
         """由界面传入具体类型，例如“小说”。"""
         self._books_cache = None
         self.request_by_type.emit(book_type)
 
-    def load_books_by_status(self, read_status: str) -> None:
+    def load_by_status(self, read_status: str) -> None:
         """由界面传入具体阅读状态，例如“正在阅读”。"""
         self._books_cache = None
         self.request_by_status.emit(read_status)
 
-    def load_books_by_author(self, author: str) -> None:
+    def load_by_author(self, author: str) -> None:
         """由界面传入具体作者名称。"""
         self._books_cache = None
         self.request_by_author.emit(author)
 
     def scan_books(self) -> None:
         """打开扫描窗口；每次只允许提交一个扫描批次。"""
-        if self._scan_in_progress:
+        if self._scanning:
             return
 
         self._scan_dialog = ScanBookFiles()
@@ -511,7 +511,7 @@ class MainWindow(QMainWindow):
             return
 
         self._pending_books = books
-        self._scan_in_progress = True
+        self._scanning = True
         if self.scan_button is not None:
             self.scan_button.setEnabled(False)
         if self.statusbar is not None:
@@ -535,9 +535,9 @@ class MainWindow(QMainWindow):
 
             # 添加自定义中文按钮 TODO: 目前UI文本为硬编码，后续可改为国际化
             overwrite = message.addButton("覆盖", QMessageBox.ButtonRole.YesRole)
-            rename    = message.addButton("重命名", QMessageBox.ButtonRole.NoRole)
-            skip      = message.addButton("跳过", QMessageBox.ButtonRole.ActionRole)
-            cancel    = message.addButton("全部取消", QMessageBox.ButtonRole.RejectRole)
+            rename = message.addButton("重命名", QMessageBox.ButtonRole.NoRole)
+            skip = message.addButton("跳过", QMessageBox.ButtonRole.ActionRole)
+            cancel = message.addButton("全部取消", QMessageBox.ButtonRole.RejectRole)
             message.exec()
             clicked = message.clickedButton()
             if clicked == overwrite:
@@ -601,7 +601,7 @@ class MainWindow(QMainWindow):
     def _finish_scan_batch(self) -> None:
         """释放当前扫描批次并恢复扫描按钮。"""
         self._pending_books = None
-        self._scan_in_progress = False
+        self._scanning = False
         if self.scan_button is not None:
             self.scan_button.setEnabled(True)
 

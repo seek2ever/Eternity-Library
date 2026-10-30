@@ -310,7 +310,7 @@ from book_record import BookRecord
 
 ```python
         self._pending_books: list[BookRecord] | None = None
-self._scan_in_progress = False
+self._scanning = False
 self._scan_dialog: ScanBookFiles | None = None
 ```
 
@@ -381,7 +381,7 @@ self.request_initialize.emit()
 
 
 """打开扫描窗口；每次只允许提交一个扫描批次。"""
-if self._scan_in_progress:
+if self._scanning:
     return
 
 self._scan_dialog = ScanBookFiles(self)
@@ -406,7 +406,7 @@ def _on_scan_books_found(self, books: object) -> None:
         return
 
     self._pending_books = books
-    self._scan_in_progress = True
+    self._scanning = True
     if self.scan_button is not None:
         self.scan_button.setEnabled(False)
     if self.statusbar is not None:
@@ -510,7 +510,7 @@ def _on_write_error(self, error_msg: str) -> None:
 def _finish_scan_batch(self) -> None:
     """释放当前扫描批次并恢复扫描按钮。"""
     self._pending_books = None
-    self._scan_in_progress = False
+    self._scanning = False
     if self.scan_button is not None:
         self.scan_button.setEnabled(True)
 ```

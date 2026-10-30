@@ -254,8 +254,8 @@ class DatabaseWorker(QObject):
     duplicates_ready = Signal(list)
     write_finished = Signal(int, int, int)  # 新增数、跳过数、覆盖数
     write_error = Signal(str)
-    mutation_finished = Signal(str, object)  # 操作类型（update/delete）、book_id
-    mutation_error = Signal(str)
+    change_finished = Signal(str, object)  # 操作类型（update/delete）、book_id
+    change_error = Signal(str)
 
     def __init__(self, db_name='books_information.db'):
         super().__init__()
@@ -564,7 +564,7 @@ class DatabaseWorker(QObject):
     ) -> None:
         """按稳定ID更新一个字段；禁止更改 book_id。"""
         if self.connection is None:
-            self.mutation_error.emit("数据库连接未初始化，无法更新书籍。")
+            self.change_error.emit("数据库连接未初始化，无法更新书籍。")
             return
 
         try:
@@ -648,16 +648,16 @@ class DatabaseWorker(QObject):
                     raise ValueError("更新记录数量不为 1，已撤销本次操作。")
 
         except (sqlite3.Error, OverflowError, TypeError, ValueError) as error:
-            self.mutation_error.emit(f"更新书籍失败：{error}")
+            self.change_error.emit(f"更新书籍失败：{error}")
             return
 
-        self.mutation_finished.emit("update", book_id)
+        self.change_finished.emit("update", book_id)
 
     @Slot(int)
     def delete_book_by_id(self, book_id: int) -> None:
         """按唯一的book_id删除一条记录。"""
         if self.connection is None:
-            self.mutation_error.emit("数据库连接未初始化，无法删除书籍。")
+            self.change_error.emit("数据库连接未初始化，无法删除书籍。")
             return
 
         try:
@@ -686,10 +686,10 @@ class DatabaseWorker(QObject):
                     raise ValueError("删除记录数量不为 1，已撤销本次操作。")
 
         except (sqlite3.Error, OverflowError, TypeError, ValueError) as error:
-            self.mutation_error.emit(f"删除书籍失败：{error}")
+            self.change_error.emit(f"删除书籍失败：{error}")
             return
 
-        self.mutation_finished.emit("delete", book_id)
+        self.change_finished.emit("delete", book_id)
 
     @Slot()
     def close_database(self):
